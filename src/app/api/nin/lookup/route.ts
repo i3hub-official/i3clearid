@@ -31,13 +31,13 @@ export async function POST(req: NextRequest) {
       data: {
         status: result.ok ? (result.data.status as string) || "matched" : "error",
         result: result.ok ? result.data : {},
-        error: result.ok ? null : result.error || "Lookup failed",
+        error: result.ok ? null : "error" in result && typeof result.error === "string" ? result.error : "Lookup failed",
       },
     });
 
     if (!result.ok)
       return NextResponse.json(
-        { error: result.error || "Lookup failed" },
+        { error: "error" in result && typeof result.error === "string" ? result.error : "Lookup failed" },
         { status: 400 }
       );
 
