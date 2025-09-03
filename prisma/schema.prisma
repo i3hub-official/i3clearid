@@ -6,10 +6,61 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  // output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model NINRequest {
+  id           String       @id @default(uuid())
+  createdAt    DateTime     @default(now())
+  ip           String?
+  userAgent    String?
+  lookupMethod LookupMethod
+  input        Json
+  consent      Boolean
+  provider     String?
+  status       Status       @default(pending)
+  result       Json?
+  ref          String?      @unique
+  error        String?
+
+  auditEvents AuditEvent[]
+}
+
+model AuditEvent {
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  scope     String
+  request   NINRequest? @relation(fields: [requestId], references: [id])
+  requestId String?
+  actor     String
+  action    String
+  details   Json?
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  provider  String
+  raw       Json
+}
+
+enum LookupMethod {
+  phone
+  email
+  nin
+  tracking_id
+  demography
+}
+
+enum Status {
+  pending
+  matched
+  not_found
+  ipe
+  error
 }
