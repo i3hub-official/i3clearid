@@ -14,6 +14,7 @@ import {
   FileText,
   Camera,
   RotateCw,
+  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -30,7 +31,6 @@ export default function VerifyBVNPage() {
   >("idle");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
   const [documentFront, setDocumentFront] = useState<string | null>(null);
   const [documentBack, setDocumentBack] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"manual" | "document">("manual");
@@ -162,8 +162,8 @@ export default function VerifyBVNPage() {
           <div className="flex justify-between items-start mb-8">
             <div>
               <div className="flex items-center mb-2">
-                <Lock className="w-8 h-8 text-primary mr-2" />
-                <h1 className="text-2xl font-bold">SecureBankID</h1>
+                <Shield className="w-8 h-8 text-primary mr-2" />
+                <h1 className="text-2xl font-bold">SecureID</h1>
               </div>
               <p className="text-sm text-foreground/70">
                 Bank-verified identity authentication
@@ -180,7 +180,7 @@ export default function VerifyBVNPage() {
 
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
-              <Lock className="w-4 h-4 text-primary mr-2" />
+              <CreditCard className="w-4 h-4 text-primary mr-2" />
               <h3 className="font-medium text-sm">BVN Verification</h3>
             </div>
             <p className="text-foreground/70 text-xs">
@@ -524,7 +524,7 @@ export default function VerifyBVNPage() {
           {/* Back to previous link */}
           <div className="flex justify-center mt-6">
             <Link
-              href="/verification-options"
+              href="/verify/verification-options"
               className="text-primary hover:underline text-sm flex items-center"
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> Back to Verification

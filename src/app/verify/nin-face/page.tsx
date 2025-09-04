@@ -31,21 +31,7 @@ export default function FaceVerificationPage() {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize camera
-  useEffect(() => {
-    if (verificationStatus === "idle") {
-      initCamera();
-    }
-
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
-      if (countdownRef.current) clearTimeout(countdownRef.current);
-      if (progressRef.current) clearInterval(progressRef.current);
-    };
-  }, [verificationStatus]);
-
+  // Initialize camera only when verification starts
   const initCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -68,9 +54,12 @@ export default function FaceVerificationPage() {
     }
   };
 
-  const startVerification = () => {
+  const startVerification = async () => {
     setVerificationStatus("scanning");
     setShowTips(true);
+
+    // Initialize camera when starting verification
+    await initCamera();
 
     // Start countdown
     let count = 3;
@@ -131,8 +120,19 @@ export default function FaceVerificationPage() {
     setVerificationStatus("idle");
     setErrorMessage("");
     setScanProgress(0);
-    initCamera();
+    // Don't initialize camera until user clicks Start Verification again
   };
+
+  // Clean up camera on unmount or when leaving page
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (countdownRef.current) clearTimeout(countdownRef.current);
+      if (progressRef.current) clearInterval(progressRef.current);
+    };
+  }, []);
 
   const getStatusMessage = () => {
     switch (verificationStatus) {
@@ -160,7 +160,7 @@ export default function FaceVerificationPage() {
                 <h1 className="text-2xl font-bold">SecureID</h1>
               </div>
               <p className="text-sm text-foreground/70">
-                Government-compliant identity verification
+                Bank-verified identity authentication
               </p>
             </div>
 
@@ -174,11 +174,11 @@ export default function FaceVerificationPage() {
 
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
-              <Shield className="w-4 h-4 text-primary mr-2" />
-              <h3 className="font-medium text-sm">Instant NIN Verification</h3>
+              <User className="w-4 h-4 text-primary mr-2" />
+              <h3 className="font-medium text-sm">Facial Recognition</h3>
             </div>
             <p className="text-foreground/70 text-xs">
-              Fastest method using facial recognition technology
+              Fastest way to verify your identity using facial recognition
             </p>
           </div>
         </div>
@@ -190,32 +190,42 @@ export default function FaceVerificationPage() {
             </h2>
             <p className="text-foreground/70 mt-2">
               {verificationStatus === "idle" &&
-                "Verify your NIN instantly using facial recognition"}
+                "Verify your identity instantly using facial recognition"}
               {verificationStatus === "scanning" &&
                 `Scanning will begin in ${countdown}...`}
               {verificationStatus === "processing" &&
                 "Please keep still while we verify your identity"}
               {verificationStatus === "success" &&
-                "Your NIN has been successfully verified!"}
+                "Your identity has been successfully verified!"}
               {verificationStatus === "error" &&
                 "We couldn't verify your identity. Please try again."}
             </p>
           </div>
 
           <div className="relative bg-black rounded-xl overflow-hidden mb-6">
-            {/* Camera feed */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`w-full h-64 object-cover ${
-                verificationStatus !== "idle" &&
-                verificationStatus !== "scanning"
-                  ? "opacity-0"
-                  : "opacity-100"
-              } transition-opacity`}
-            />
+            {/* Camera feed - only show when scanning or processing */}
+            {(verificationStatus === "scanning" ||
+              verificationStatus === "processing") && (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-64 object-cover"
+              />
+            )}
+
+            {/* Placeholder when camera is not active */}
+            {verificationStatus === "idle" && (
+              <div className="w-full h-64 bg-border flex items-center justify-center">
+                <div className="text-center">
+                  <Camera className="w-12 h-12 text-foreground/50 mx-auto mb-2" />
+                  <p className="text-foreground/70 text-sm">
+                    Camera will activate when verification starts
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Scanning overlay */}
             {(verificationStatus === "scanning" ||
@@ -286,7 +296,7 @@ export default function FaceVerificationPage() {
           </div>
 
           {showTips && verificationStatus === "idle" && (
-            <div className="bg-muted rounded-lg p-4 mb-6">
+            <div className="bg-primary/5 rounded-lg p-4 mb-6">
               <h3 className="font-medium text-sm mb-2 flex items-center">
                 <Camera className="w-4 h-4 mr-2" /> Tips for best results
               </h3>
@@ -334,11 +344,10 @@ export default function FaceVerificationPage() {
               <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
                 <div className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-primary mr-2" />
-                  <h3 className="font-medium">NIN Verification Complete</h3>
+                  <h3 className="font-medium">Verification Complete</h3>
                 </div>
                 <p className="text-foreground/70 text-sm mt-1">
-                  Your National Identification Number has been successfully
-                  verified.
+                  Your identity has been successfully verified.
                 </p>
               </div>
 
@@ -355,16 +364,16 @@ export default function FaceVerificationPage() {
             verificationStatus === "success") && (
             <button
               onClick={retryVerification}
-              className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-muted transition flex items-center justify-center mt-4"
+              className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-primary/5 transition flex items-center justify-center mt-4"
             >
-              <RotateCw className="w-5 h-5 mr-2" /> Verify Another NIN
+              <RotateCw className="w-5 h-5 mr-2" /> Verify Again
             </button>
           )}
 
           {/* Back to verification options link */}
           <div className="flex justify-center mt-6">
             <Link
-              href="/verification-options"
+              href="/verify/verification-options"
               className="text-primary hover:underline text-sm flex items-center"
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> Other Verification Methods

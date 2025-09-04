@@ -478,7 +478,7 @@ export default function VerifyNINPage() {
           {/* Back to previous link */}
           <div className="flex justify-center mt-6">
             <Link
-              href="/verification-options"
+              href="/verify/verification-options"
               className="text-primary hover:underline text-sm flex items-center"
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> Back to Verification
