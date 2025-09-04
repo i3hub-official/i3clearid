@@ -4,7 +4,7 @@ import "./globals.css";
 
 import Navbar from "@/components/glob/Navbar";
 import Footer from "@/components/glob/Footer";
-import ThemeProvider from "@/components/glob/ThemeProvider";
+// import ThemeProvider from "@/components/glob/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
