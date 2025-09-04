@@ -1,19 +1,47 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, Shield, Zap, Globe, CheckCircle, ArrowRight, Menu, X, Star } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  ChevronRight,
+  Shield,
+  Zap,
+  Globe,
+  CheckCircle,
+  ArrowRight,
+  Menu,
+  X,
+  Star,
+} from "lucide-react";
 
 export default function ModernLandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
 
+  const testimonials = [
+    {
+      name: "Sarah O.",
+      role: "Business Owner",
+      text: "Fast and reliable NIN verification. Saved me hours of paperwork!",
+    },
+    {
+      name: "David M.",
+      role: "HR Manager",
+      text: "The bulk verification feature is a game-changer for our recruitment process.",
+    },
+    {
+      name: "Amina K.",
+      role: "Freelancer",
+      text: "Simple interface and instant results. Highly recommended!",
+    },
+  ];
+
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -21,20 +49,18 @@ export default function ModernLandingPage() {
       setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
-
-  const testimonials = [
-    { name: "Sarah O.", role: "Business Owner", text: "Fast and reliable NIN verification. Saved me hours of paperwork!" },
-    { name: "David M.", role: "HR Manager", text: "The bulk verification feature is a game-changer for our recruitment process." },
-    { name: "Amina K.", role: "Freelancer", text: "Simple interface and instant results. Highly recommended!" }
-  ];
+  }, [testimonials.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white overflow-x-hidden">
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-slate-900/95 backdrop-blur-lg shadow-2xl' : 'bg-transparent'
-      }`}>
+      <nav
+        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+          isScrolled
+            ? "bg-slate-900/95 backdrop-blur-lg shadow-2xl"
+            : "bg-transparent"
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -45,21 +71,40 @@ export default function ModernLandingPage() {
                 i3ClearID
               </span>
             </div>
-            
+
             <div className="hidden md:flex items-center space-x-8">
-              <a href="#services" className="text-slate-300 hover:text-white transition-colors">Services</a>
-              <a href="#how-it-works" className="text-slate-300 hover:text-white transition-colors">How it Works</a>
-              <a href="#status" className="text-slate-300 hover:text-white transition-colors">Status</a>
+              <a
+                href="#services"
+                className="text-slate-300 hover:text-white transition-colors"
+              >
+                Services
+              </a>
+              <a
+                href="#how-it-works"
+                className="text-slate-300 hover:text-white transition-colors"
+              >
+                How it Works
+              </a>
+              <a
+                href="#status"
+                className="text-slate-300 hover:text-white transition-colors"
+              >
+                Status
+              </a>
               <button className="bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 transform hover:scale-105">
                 Get Started
               </button>
             </div>
 
-            <button 
+            <button
               className="md:hidden text-white"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
-              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {isMobileMenuOpen ? (
+                <X className="w-6 h-6" />
+              ) : (
+                <Menu className="w-6 h-6" />
+              )}
             </button>
           </div>
         </div>
@@ -68,9 +113,24 @@ export default function ModernLandingPage() {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-slate-900/95 backdrop-blur-lg border-t border-slate-700">
             <div className="px-6 py-4 space-y-4">
-              <a href="#services" className="block text-slate-300 hover:text-white transition-colors">Services</a>
-              <a href="#how-it-works" className="block text-slate-300 hover:text-white transition-colors">How it Works</a>
-              <a href="#status" className="block text-slate-300 hover:text-white transition-colors">Status</a>
+              <a
+                href="#services"
+                className="block text-slate-300 hover:text-white transition-colors"
+              >
+                Services
+              </a>
+              <a
+                href="#how-it-works"
+                className="block text-slate-300 hover:text-white transition-colors"
+              >
+                How it Works
+              </a>
+              <a
+                href="#status"
+                className="block text-slate-300 hover:text-white transition-colors"
+              >
+                Status
+              </a>
               <button className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2 rounded-full font-semibold">
                 Get Started
               </button>
@@ -86,9 +146,11 @@ export default function ModernLandingPage() {
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-slate-800/50 backdrop-blur-lg px-4 py-2 rounded-full mb-8 border border-slate-700">
               <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span className="text-sm text-slate-300">Powered by I3Hub Technology</span>
+              <span className="text-sm text-slate-300">
+                Powered by I3Hub Technology
+              </span>
             </div>
-            
+
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-emerald-100 to-cyan-100 bg-clip-text text-transparent leading-tight">
               Secure Identity
               <br />
@@ -96,10 +158,10 @@ export default function ModernLandingPage() {
                 Verification
               </span>
             </h1>
-            
+
             <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-              Print, verify, and track your NIN and BVN details with cutting-edge security.
-              Government-compliant and lightning-fast.
+              Print, verify, and track your NIN and BVN details with
+              cutting-edge security. Government-compliant and lightning-fast.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
@@ -135,7 +197,8 @@ export default function ModernLandingPage() {
               </span>
             </h2>
             <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-              Everything you need for secure identity verification and document management
+              Everything you need for secure identity verification and document
+              management
             </p>
           </div>
 
@@ -185,9 +248,14 @@ export default function ModernLandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              How It <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Works</span>
+              How It{" "}
+              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                Works
+              </span>
             </h2>
-            <p className="text-xl text-slate-400">Simple, secure, and lightning-fast verification process</p>
+            <p className="text-xl text-slate-400">
+              Simple, secure, and lightning-fast verification process
+            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -214,20 +282,29 @@ export default function ModernLandingPage() {
       <section className="py-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-12">
-            What Our <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Users Say</span>
+            What Our{" "}
+            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              Users Say
+            </span>
           </h2>
-          
+
           <div className="relative h-48">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
                 className={`absolute inset-0 transition-all duration-500 ${
-                  index === currentTestimonial ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-95'
+                  index === currentTestimonial
+                    ? "opacity-100 transform scale-100"
+                    : "opacity-0 transform scale-95"
                 }`}
               >
                 <div className="bg-slate-800/50 backdrop-blur-lg p-8 rounded-2xl border border-slate-700">
-                  <p className="text-lg text-slate-300 mb-4 italic">"{testimonial.text}"</p>
-                  <div className="font-semibold text-white">{testimonial.name}</div>
+                  <p className="text-lg text-slate-300 mb-4 italic">
+                    &quot;{testimonial.text}&quot;
+                  </p>
+                  <div className="font-semibold text-white">
+                    {testimonial.name}
+                  </div>
                   <div className="text-emerald-400">{testimonial.role}</div>
                 </div>
               </div>
@@ -240,7 +317,9 @@ export default function ModernLandingPage() {
                 key={index}
                 onClick={() => setCurrentTestimonial(index)}
                 className={`w-3 h-3 rounded-full transition-all ${
-                  index === currentTestimonial ? 'bg-emerald-400' : 'bg-slate-600'
+                  index === currentTestimonial
+                    ? "bg-emerald-400"
+                    : "bg-slate-600"
                 }`}
               />
             ))}
@@ -256,7 +335,8 @@ export default function ModernLandingPage() {
               Ready to Get Started?
             </h2>
             <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-              Join thousands of users who trust i3ClearID for secure, reliable, and government-compliant identity services.
+              Join thousands of users who trust i3ClearID for secure, reliable,
+              and government-compliant identity services.
             </p>
             <button className="bg-gradient-to-r from-emerald-500 to-cyan-500 px-12 py-4 rounded-full font-bold text-lg hover:shadow-2xl hover:shadow-emerald-500/25 transition-all duration-300 transform hover:scale-105">
               Start Verification Now
@@ -278,9 +358,11 @@ export default function ModernLandingPage() {
                   i3ClearID
                 </span>
               </div>
-              <p className="text-slate-400">Secure identity verification powered by I3Hub technology.</p>
+              <p className="text-slate-400">
+                Secure identity verification powered by I3Hub technology.
+              </p>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4 text-white">Services</h3>
               <div className="space-y-2 text-slate-400">
@@ -290,7 +372,7 @@ export default function ModernLandingPage() {
                 <div>Status Tracking</div>
               </div>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4 text-white">Support</h3>
               <div className="space-y-2 text-slate-400">
@@ -300,7 +382,7 @@ export default function ModernLandingPage() {
                 <div>System Status</div>
               </div>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4 text-white">Company</h3>
               <div className="space-y-2 text-slate-400">
@@ -311,9 +393,12 @@ export default function ModernLandingPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="border-t border-slate-800 pt-8 text-center text-slate-400">
-            <p>© {new Date().getFullYear()} i3ClearID · Part of <span className="text-emerald-400 font-semibold">I3Hub</span></p>
+            <p>
+              © {new Date().getFullYear()} i3ClearID · Part of{" "}
+              <span className="text-emerald-400 font-semibold">I3Hub</span>
+            </p>
           </div>
         </div>
       </footer>
@@ -332,7 +417,12 @@ function StatCard({ number, label }: { number: string; label: string }) {
   );
 }
 
-function FeatureCard({ icon, title, description, gradient }: {
+function FeatureCard({
+  icon,
+  title,
+  description,
+  gradient,
+}: {
   icon: React.ReactNode;
   title: string;
   description: string;
@@ -340,7 +430,9 @@ function FeatureCard({ icon, title, description, gradient }: {
 }) {
   return (
     <div className="group bg-slate-800/50 backdrop-blur-lg p-8 rounded-2xl border border-slate-700 hover:border-slate-600 transition-all duration-300 hover:transform hover:scale-105">
-      <div className={`w-16 h-16 bg-gradient-to-r ${gradient} rounded-2xl flex items-center justify-center mb-6 text-white group-hover:shadow-lg transition-all duration-300`}>
+      <div
+        className={`w-16 h-16 bg-gradient-to-r ${gradient} rounded-2xl flex items-center justify-center mb-6 text-white group-hover:shadow-lg transition-all duration-300`}
+      >
         {icon}
       </div>
       <h3 className="text-xl font-bold mb-4 text-white">{title}</h3>
@@ -349,7 +441,11 @@ function FeatureCard({ icon, title, description, gradient }: {
   );
 }
 
-function ProcessStep({ step, title, description }: {
+function ProcessStep({
+  step,
+  title,
+  description,
+}: {
   step: string;
   title: string;
   description: string;
