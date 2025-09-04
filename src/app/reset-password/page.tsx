@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import {
   Shield,
   Mail,
@@ -15,7 +15,8 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-export default function VerifyResetPage() {
+// Create a component that uses useSearchParams
+function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const [verificationStatus, setVerificationStatus] = useState<
     "verifying" | "success" | "error"
@@ -124,10 +125,10 @@ export default function VerifyResetPage() {
             <div>
               <div className="flex items-center mb-2">
                 <Shield className="w-8 h-8 text-primary mr-2" />
-                <h1 className="text-2xl font-bold">SecureID</h1>
+                <h1 className="text-2xl font-bold">SecureBankID</h1>
               </div>
               <p className="text-sm text-foreground/70">
-                Government-compliant identity verification
+                Bank-verified identity authentication
               </p>
             </div>
 
@@ -357,7 +358,7 @@ export default function VerifyResetPage() {
 
                 <Link
                   href="/signin"
-                  className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-muted transition flex items-center justify-center"
+                  className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-primary/5 transition flex items-center justify-center"
                 >
                   <ArrowLeft className="w-5 h-5 mr-2" /> Back to Sign In
                 </Link>
@@ -377,5 +378,25 @@ export default function VerifyResetPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main component that wraps the content with Suspense
+export default function VerifyResetPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 py-8">
+          <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-foreground/70">Loading verification...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
