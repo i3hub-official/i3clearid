@@ -11,47 +11,53 @@ export default function ThemeProvider({
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // On mount, check localStorage or system preference
   useEffect(() => {
     const saved = localStorage.getItem("theme") as "light" | "dark" | null;
-    if (saved) {
-      setTheme(saved);
-      document.documentElement.classList.toggle("dark", saved === "dark");
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      const systemTheme = prefersDark ? "dark" : "light";
-      setTheme(systemTheme);
-      document.documentElement.classList.toggle("dark", prefersDark);
-    }
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
+
+    // Determine initial theme
+    const initialTheme = saved || (prefersDark ? "dark" : "light");
+
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("dark", initialTheme === "dark");
     setMounted(true);
   }, []);
 
   const toggleTheme = () => {
     if (!theme) return;
     const newTheme = theme === "dark" ? "light" : "dark";
+
     setTheme(newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
     localStorage.setItem("theme", newTheme);
   };
 
+  // Prevent flash of unstyled content
   if (!mounted) {
-    // Avoid showing wrong theme before hydration
-    return <>{children}</>;
+    return <div className="hidden">{children}</div>;
   }
 
   return (
     <>
       <button
         onClick={toggleTheme}
-         className="fixed bottom-6 right-6 z-50 p-3 rounded-full bg-primary text-white shadow-lg hover:scale-110 transition-transform"
-  aria-label="Toggle Theme"
+        className="fixed top-24 right-4 z-50 p-3 rounded-full bg-background/80 backdrop-blur-sm 
+                 text-foreground border border-border shadow-lg hover:scale-110 transition-all 
+                 duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 
+                 focus:ring-offset-background"
+        aria-label={
+          theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+        }
+        title={
+          theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+        }
       >
         {theme === "dark" ? (
-          <Sun className="w-6 h-6" />
+          <Sun className="w-5 h-5" />
         ) : (
-          <Moon className="w-6 h-6" />
+          <Moon className="w-5 h-5" />
         )}
       </button>
       {children}
