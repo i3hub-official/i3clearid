@@ -432,7 +432,7 @@ export default function SignupPage() {
               href="/"
               className="text-primary hover:underline flex items-center text-sm"
             >
-              <Home className="w-4 h-4 mr-1" /> Back to Home
+              <Home className="w-4 h-4 mr-1" /> Home
             </Link>
             <Link
               href="/signin"
