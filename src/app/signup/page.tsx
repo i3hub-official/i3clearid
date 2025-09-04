@@ -109,7 +109,7 @@ export default function SignupPage() {
         const statesList = data.states || [];
         setStates(statesList);
         sessionStorage.setItem("cachedStates", JSON.stringify(statesList));
-      } catch (error) {
+      } catch {
         console.error("Failed to load states");
       }
     };
@@ -140,7 +140,7 @@ export default function SignupPage() {
         const lgasList = data.lgas || [];
         setLgas(lgasList);
         lgaCache.set(formData.state, lgasList);
-      } catch (error) {
+      } catch {
         console.error("Failed to load LGAs");
       }
     };

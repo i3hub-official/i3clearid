@@ -154,16 +154,16 @@ export default function GovLandingPage() {
               Verify, print, and manage your NIN and BVN documents with
               government-compliant security. Reliable, fast, and trusted.
             </p>
-           <Link href="/target-page">
-  <div className="flex flex-col sm:flex-row gap-4 justify-center cursor-pointer">
-    <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition">
-      Get Started Now <ArrowRight className="w-5 h-5" />
-    </button>
-    <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary flex items-center justify-center gap-2 transition">
-      <Play className="w-5 h-5" /> Watch Demo
-    </button>
-  </div>
-</Link>
+            <Link href="/signup">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center cursor-pointer">
+                <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition">
+                  Get Started Now <ArrowRight className="w-5 h-5" />
+                </button>
+                <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary flex items-center justify-center gap-2 transition">
+                  <Play className="w-5 h-5" /> Watch Demo
+                </button>
+              </div>
+            </Link>
           </div>
           {/* Verification Services Section */}
           <div className="mt-16 relative">
@@ -444,14 +444,20 @@ export default function GovLandingPage() {
             Join thousands of satisfied users who trust our verification
             services
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 transition">
-              Create Account
-            </button>
-            <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary transition">
-              Contact Sales
-            </button>
-          </div>
+          <Link href="/signup">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 transition">
+                Create Account
+              </button>
+            </div>
+          </Link>
+          <Link href="#">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary transition mt-5">
+                Contact Sales
+              </button>
+            </div>
+          </Link>
         </div>
       </section>
     </div>
