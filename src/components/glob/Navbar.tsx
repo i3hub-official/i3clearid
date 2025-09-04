@@ -118,13 +118,22 @@ export default function Navbar() {
 
             {/* Auth Buttons - Desktop */}
             <div className="hidden md:flex items-center space-x-4">
-              <button className="bg-transparent hover:bg-primary/10 text-foreground font-medium py-2 px-4 rounded-md transition">
-                <User className="w-4 h-4 inline mr-2" />
-                Sign In
-              </button>
-              <button className="bg-primary text-white font-medium py-2 px-5 rounded-md hover:bg-primary/90 transition">
-                Get Started
-              </button>
+              <div className="flex space-x-3">
+                {/* Sign In button */}
+                <Link href="/signin">
+                  <button className="bg-transparent hover:bg-primary/10 text-foreground font-medium py-2 px-4 rounded-md transition flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Sign In
+                  </button>
+                </Link>
+
+                {/* Get Started button */}
+                <Link href="/signup">
+                  <button className="bg-primary text-white font-medium py-2 px-5 rounded-md hover:bg-primary/90 transition inline-block">
+                    Get Started
+                  </button>
+                </Link>
+              </div>
 
               {/* Desktop Theme Toggle */}
               {mounted && (
@@ -171,44 +180,49 @@ export default function Navbar() {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-card border-t border-border">
             <div className="px-2 pt-2 pb-4 space-y-2">
-              <Link
-                href="#services"
-                className="block px-3 py-2 rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <FileText className="w-4 h-4 inline mr-2" />
-                Services
-              </Link>
-              <Link
-                href="#how-it-works"
-                className="block px-3 py-2 rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                How It Works
-              </Link>
-              <Link
-                href="#testimonials"
-                className="block px-3 py-2 rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Testimonials
-              </Link>
-              <Link
-                href="#contact"
-                className="block px-3 py-2 rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Phone className="w-4 h-4 inline mr-2" />
-                Contact
-              </Link>
+              {[
+                {
+                  href: "#services",
+                  label: "Services",
+                  icon: <FileText className="w-4 h-4 inline mr-2" />,
+                },
+                { href: "#how-it-works", label: "How It Works" },
+                { href: "#testimonials", label: "Testimonials" },
+                {
+                  href: "#contact",
+                  label: "Contact",
+                  icon: <Phone className="w-4 h-4 inline mr-2" />,
+                },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="block px-3 py-2 rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              ))}
 
               <div className="pt-2 border-t border-border mt-2 space-y-2">
-                <button className="w-full text-left px-3 py-2 rounded-md text-foreground hover:bg-primary/10 transition">
-                  Sign In
-                </button>
-                <button className="w-full bg-primary text-white font-medium py-2 px-4 rounded-md hover:bg-primary/90 transition">
+                {/* Sign In button */}
+                <Link
+                  href="/signin"
+                  className="block bg-transparent hover:bg-primary/10 text-foreground font-medium py-2 px-4 rounded-md transition flex items-center justify-center"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <User className="w-4 h-4 mr-2" /> Sign In
+                </Link>
+
+                {/* Get Started button */}
+                <Link
+                  href="/signup"
+                  className="block bg-primary text-white font-medium py-2 px-4 rounded-md hover:bg-primary/90 transition text-center"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
                   Get Started
-                </button>
+                </Link>
               </div>
             </div>
           </div>

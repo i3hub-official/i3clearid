@@ -53,7 +53,7 @@ export default function RootLayout({
       >
         {/* <ThemeProvider> */}
         <Navbar />
-        <main className="pt-20">{children}</main>
+        <main className="pt-15">{children}</main>
         <Footer />
         {/* </ThemeProvider> */}
       </body>
