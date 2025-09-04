@@ -102,9 +102,15 @@ export default function Navbar() {
                   }
                 >
                   {theme === "dark" ? (
-                    <Sun className="w-5 h-5" />
+                    <Sun
+                      className="w-5 h-5 transform transition-transform duration-300 ease-in-out rotate-180 scale-110 hover:scale-125 hover:rotate-12
+"
+                    />
                   ) : (
-                    <Moon className="w-5 h-5" />
+                    <Moon
+                      className="w-5 h-5 transform transition-transform duration-300 ease-in-out rotate-0 scale-110 hover:scale-125 hover:rotate-12
+"
+                    />
                   )}
                 </button>
               </div>
