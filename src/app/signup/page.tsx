@@ -435,7 +435,7 @@ export default function SignupPage() {
               <Home className="w-4 h-4 mr-1" /> Back to Home
             </Link>
             <Link
-              href="/login"
+              href="/signin"
               className="text-primary hover:underline text-sm"
             >
               Already have an account? Sign In
@@ -445,7 +445,7 @@ export default function SignupPage() {
           {/* Desktop sign in link */}
           <div className="hidden md:flex justify-end mb-4">
             <Link
-              href="/login"
+              href="/signin"
               className="text-primary hover:underline text-sm"
             >
               Already have an account? Sign In

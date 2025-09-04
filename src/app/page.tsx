@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Shield,
   Zap,
@@ -14,9 +15,12 @@ import {
   ChevronRight,
   Play,
   Check,
+  Vote,
+  Globe,
+  Car,
+  Phone,
+  Globe2,
 } from "lucide-react";
-
-import { Globe, Globe2, Car, Phone, Vote } from "lucide-react";
 
 export default function GovLandingPage() {
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
@@ -150,14 +154,16 @@ export default function GovLandingPage() {
               Verify, print, and manage your NIN and BVN documents with
               government-compliant security. Reliable, fast, and trusted.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition">
-                Get Started Now <ArrowRight className="w-5 h-5" />
-              </button>
-              <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary flex items-center justify-center gap-2 transition">
-                <Play className="w-5 h-5" /> Watch Demo
-              </button>
-            </div>
+           <Link href="/target-page">
+  <div className="flex flex-col sm:flex-row gap-4 justify-center cursor-pointer">
+    <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition">
+      Get Started Now <ArrowRight className="w-5 h-5" />
+    </button>
+    <button className="px-8 py-4 rounded-lg font-semibold hover:bg-card hover:text-primary flex items-center justify-center gap-2 transition">
+      <Play className="w-5 h-5" /> Watch Demo
+    </button>
+  </div>
+</Link>
           </div>
           {/* Verification Services Section */}
           <div className="mt-16 relative">
