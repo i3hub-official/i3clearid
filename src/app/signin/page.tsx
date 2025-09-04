@@ -17,12 +17,20 @@ import Link from "next/link";
 export default function SignInPage() {
   const [authMethod, setAuthMethod] = useState<"password" | "passkey">(
     "password"
-      );
+  );
   const [formData, setFormData] = useState({
     identifier: "",
     password: "",
     rememberMe: false,
   });
+
+  function clearInput() {
+    setFormData({
+      identifier: "",
+      password: "",
+      rememberMe: false,
+    });
+  }
 
   const [showPassword, setShowPassword] = useState(false);
   type Errors = {
@@ -92,22 +100,21 @@ export default function SignInPage() {
           rememberMe: formData.rememberMe,
         });
         setIsSubmitting(false);
+        clearInput();
         alert("Signed in successfully!");
-        formData.identifier = "";
-        formData.password = "";
-        formData.rememberMe = false;
       }, 1500);
     }
   };
 
   const handlePasskeySignIn = () => {
-
     setIsSubmitting(true);
+    clearInput();
 
     // Simulate passkey authentication
     setTimeout(() => {
       console.log("Passkey authentication successful");
       setIsSubmitting(false);
+      clearInput();
       alert("Signed in with passkey successfully!");
     }, 1500);
   };
