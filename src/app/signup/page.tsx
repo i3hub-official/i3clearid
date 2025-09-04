@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Shield,
   User,
@@ -15,14 +16,37 @@ import {
   Check,
   Eye,
   EyeOff,
+  Home,
 } from "lucide-react";
 
+type FormDataType = {
+  surname: string;
+  firstname: string;
+  othername: string;
+  dateOfBirth: string;
+  gender: string;
+  email: string;
+  phone: string;
+  address: string;
+  state: string;
+  lga: string;
+  idType: "nin" | "bvn";
+  nin: string;
+  bvn: string;
+  password: string;
+  confirmPassword: string;
+  agreeToTerms: boolean;
+  agreeToPrivacy: boolean;
+  newsletter: boolean;
+};
+
 export default function SignupPage() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [formData, setFormData] = useState<FormDataType>({
     // Step 1: Personal Details
-    firstName: "",
-    lastName: "",
+    surname: "",
+    firstname: "",
+    othername: "",
     dateOfBirth: "",
     gender: "",
 
@@ -31,6 +55,7 @@ export default function SignupPage() {
     phone: "",
     address: "",
     state: "",
+    lga: "",
 
     // Step 3: Identification
     idType: "nin",
@@ -49,8 +74,11 @@ export default function SignupPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [states, setStates] = useState<string[]>([]);
+  const [lgas, setLgas] = useState<string[]>([]);
+  const [lgaCache] = useState(new Map<string, string[]>());
 
   const steps = [
     { id: 1, title: "Personal Details", icon: <User className="w-5 h-5" /> },
@@ -60,11 +88,71 @@ export default function SignupPage() {
     { id: 5, title: "Agreement", icon: <CheckCircle className="w-5 h-5" /> },
   ];
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  // Fetch states on component mount
+  useEffect(() => {
+    const fetchStatesData = async () => {
+      try {
+        const cached = sessionStorage.getItem("cachedStates");
+        if (cached) {
+          setStates(JSON.parse(cached));
+          return;
+        }
+
+        const res = await fetch("https://apinigeria.vercel.app/api/v1/states");
+        const data = await res.json();
+        const statesList = data.states || [];
+        setStates(statesList);
+        sessionStorage.setItem("cachedStates", JSON.stringify(statesList));
+      } catch (error) {
+        console.error("Failed to load states");
+      }
+    };
+
+    fetchStatesData();
+  }, []);
+
+  // Fetch LGAs when state changes
+  useEffect(() => {
+    const fetchLgasData = async () => {
+      if (!formData.state) {
+        setLgas([]);
+        return;
+      }
+
+      if (lgaCache.has(formData.state)) {
+        setLgas(lgaCache.get(formData.state) || []);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `https://apinigeria.vercel.app/api/v1/lga?state=${encodeURIComponent(
+            formData.state
+          )}`
+        );
+        const data = await res.json();
+        const lgasList = data.lgas || [];
+        setLgas(lgasList);
+        lgaCache.set(formData.state, lgasList);
+      } catch (error) {
+        console.error("Failed to load LGAs");
+      }
+    };
+
+    fetchLgasData();
+  }, [formData.state, lgaCache]);
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value, type } = e.target;
+
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]:
+        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
 
     // Clear error when user starts typing
@@ -74,16 +162,22 @@ export default function SignupPage() {
         [name]: "",
       }));
     }
+
+    // Reset LGA when state changes
+    if (name === "state") {
+      setFormData((prev) => ({ ...prev, lga: "" }));
+    }
   };
 
-  const validateStep = (step) => {
-    const newErrors = {};
+  const validateStep = (step: number) => {
+    const newErrors: { [key: string]: string } = {};
 
     if (step === 1) {
-      if (!formData.firstName.trim())
-        newErrors.firstName = "First name is required";
-      if (!formData.lastName.trim())
-        newErrors.lastName = "Last name is required";
+      if (!formData.surname.trim()) newErrors.surname = "Surname is required";
+      if (!formData.firstname.trim())
+        newErrors.firstname = "First name is required";
+      // if (!formData.othername.trim())
+      //   newErrors.othername = "Other name is required";
       if (!formData.dateOfBirth)
         newErrors.dateOfBirth = "Date of birth is required";
       if (!formData.gender) newErrors.gender = "Please select gender";
@@ -106,6 +200,10 @@ export default function SignupPage() {
 
       if (!formData.state) {
         newErrors.state = "Please select your state";
+      }
+
+      if (!formData.lga) {
+        newErrors.lga = "Please select your LGA";
       }
     }
 
@@ -150,8 +248,11 @@ export default function SignupPage() {
       if (currentStep < steps.length) {
         setCurrentStep(currentStep + 1);
 
-        // Scroll to top on step change
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        // Scroll to top of form on step change (not beginning of page)
+        const formContainer = document.querySelector(".form-container");
+        if (formContainer) {
+          formContainer.scrollTo({ top: 0, behavior: "smooth" });
+        }
       } else {
         handleSubmit();
       }
@@ -162,8 +263,11 @@ export default function SignupPage() {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
 
-      // Scroll to top on step change
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // Scroll to top of form on step change (not beginning of page)
+      const formContainer = document.querySelector(".form-container");
+      if (formContainer) {
+        formContainer.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
   };
 
@@ -294,7 +398,36 @@ export default function SignupPage() {
         </div>
 
         {/* Right Side - Form */}
-        <div className="w-full md:w-3/5 p-6 md:p-8">
+        <div
+          className="w-full md:w-3/5 p-6 md:p-8 form-container"
+          style={{ maxHeight: "calc(100vh - 2rem)", overflowY: "auto" }}
+        >
+          {/* Mobile-only back to home button */}
+          <div className="md:hidden mb-4 flex justify-between items-center">
+            <Link
+              href="/"
+              className="text-primary hover:underline flex items-center text-sm"
+            >
+              <Home className="w-4 h-4 mr-1" /> Back to Home
+            </Link>
+            <Link
+              href="/login"
+              className="text-primary hover:underline text-sm"
+            >
+              Already have an account? Sign In
+            </Link>
+          </div>
+
+          {/* Desktop sign in link */}
+          <div className="hidden md:flex justify-end mb-4">
+            <Link
+              href="/login"
+              className="text-primary hover:underline text-sm"
+            >
+              Already have an account? Sign In
+            </Link>
+          </div>
+
           {/* Progress Steps */}
           <div className="hidden md:flex justify-between mb-8 relative">
             <div className="absolute top-3 left-0 right-0 h-1 bg-foreground/10 -z-10"></div>
@@ -348,52 +481,78 @@ export default function SignupPage() {
             {currentStep === 1 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Surname */}
                   <div>
                     <label
-                      htmlFor="firstName"
+                      htmlFor="surname"
+                      className="block text-sm font-medium mb-2"
+                    >
+                      Surname
+                    </label>
+                    <input
+                      type="text"
+                      id="surname"
+                      name="surname"
+                      value={formData.surname}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 rounded-lg border ${
+                        errors.surname ? "border-red-500" : "border-border"
+                      } focus:outline-none focus:ring-2 focus:ring-primary/30`}
+                      placeholder="Enter your last name"
+                    />
+                    {errors.surname && (
+                      <p className="mt-1 text-sm text-red-500">
+                        {errors.surname}
+                      </p>
+                    )}
+                  </div>
+                  {/* First Name */}
+                  <div>
+                    <label
+                      htmlFor="firstname"
                       className="block text-sm font-medium mb-2"
                     >
                       First Name
                     </label>
                     <input
                       type="text"
-                      id="firstName"
-                      name="firstName"
-                      value={formData.firstName}
+                      id="firstname"
+                      name="firstname"
+                      value={formData.firstname}
                       onChange={handleChange}
                       className={`w-full px-4 py-3 rounded-lg border ${
-                        errors.firstName ? "border-red-500" : "border-border"
+                        errors.firstname ? "border-red-500" : "border-border"
                       } focus:outline-none focus:ring-2 focus:ring-primary/30`}
                       placeholder="Enter your first name"
                     />
-                    {errors.firstName && (
+                    {errors.firstname && (
                       <p className="mt-1 text-sm text-red-500">
-                        {errors.firstName}
+                        {errors.firstname}
                       </p>
                     )}
                   </div>
-
+                  {/* Other Name */}
                   <div>
                     <label
-                      htmlFor="lastName"
+                      htmlFor="othername"
                       className="block text-sm font-medium mb-2"
                     >
-                      Last Name
+                      Other Name
                     </label>
                     <input
                       type="text"
-                      id="lastName"
-                      name="lastName"
-                      value={formData.lastName}
+                      id="othername"
+                      name="othername"
+                      value={formData.othername}
                       onChange={handleChange}
                       className={`w-full px-4 py-3 rounded-lg border ${
-                        errors.lastName ? "border-red-500" : "border-border"
+                        errors.othername ? "border-red-500" : "border-border"
                       } focus:outline-none focus:ring-2 focus:ring-primary/30`}
-                      placeholder="Enter your last name"
+                      placeholder="Enter your other name (Optional)"
                     />
-                    {errors.lastName && (
+                    {errors.othername && (
                       <p className="mt-1 text-sm text-red-500">
-                        {errors.lastName}
+                        {errors.othername}
                       </p>
                     )}
                   </div>
@@ -500,57 +659,90 @@ export default function SignupPage() {
                   )}
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="address"
-                    className="block text-sm font-medium mb-2"
-                  >
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 rounded-lg border ${
-                      errors.address ? "border-red-500" : "border-border"
-                    } focus:outline-none focus:ring-2 focus:ring-primary/30`}
-                    placeholder="Enter your address"
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors.address}
-                    </p>
-                  )}
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="state"
+                      className="block text-sm font-medium mb-2"
+                    >
+                      State
+                    </label>
+                    <select
+                      id="state"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 rounded-lg border ${
+                        errors.state ? "border-red-500" : "border-border"
+                      } focus:outline-none focus:ring-2 focus:ring-primary/30`}
+                    >
+                      <option value="">Select State</option>
+                      {states.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.state && (
+                      <p className="mt-1 text-sm text-red-500">
+                        {errors.state}
+                      </p>
+                    )}
+                  </div>
 
-                <div>
-                  <label
-                    htmlFor="state"
-                    className="block text-sm font-medium mb-2"
-                  >
-                    State
-                  </label>
-                  <select
-                    id="state"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 rounded-lg border ${
-                      errors.state ? "border-red-500" : "border-border"
-                    } focus:outline-none focus:ring-2 focus:ring-primary/30`}
-                  >
-                    <option value="">Select State</option>
-                    <option value="lagos">Lagos</option>
-                    <option value="abuja">Abuja</option>
-                    <option value="kano">Kano</option>
-                    <option value="rivers">Rivers</option>
-                    <option value="others">Others</option>
-                  </select>
-                  {errors.state && (
-                    <p className="mt-1 text-sm text-red-500">{errors.state}</p>
-                  )}
+                  <div>
+                    <label
+                      htmlFor="lga"
+                      className="block text-sm font-medium mb-2"
+                    >
+                      LGA
+                    </label>
+                    <select
+                      id="lga"
+                      name="lga"
+                      value={formData.lga}
+                      onChange={handleChange}
+                      disabled={!formData.state}
+                      className={`w-full px-4 py-3 rounded-lg border ${
+                        errors.lga ? "border-red-500" : "border-border"
+                      } focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50`}
+                    >
+                      <option value="">Select LGA</option>
+                      {lgas.map((lga) => (
+                        <option key={lga} value={lga}>
+                          {lga}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.lga && (
+                      <p className="mt-1 text-sm text-red-500">{errors.lga}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="address"
+                      className="block text-sm font-medium mb-2"
+                    >
+                      Address
+                    </label>
+                    <textarea
+                      id="address"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleChange}
+                      rows={3}
+                      className={`w-full px-4 py-3 rounded-lg border ${
+                        errors.address ? "border-red-500" : "border-border"
+                      } focus:outline-none focus:ring-2 focus:ring-primary/30`}
+                      placeholder="Enter your full address"
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-sm text-red-500">
+                        {errors.address}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -623,13 +815,13 @@ export default function SignupPage() {
                       type="text"
                       id="nin"
                       name="nin"
+                      maxLength={11}
                       value={formData.nin}
                       onChange={handleChange}
                       className={`w-full px-4 py-3 rounded-lg border ${
                         errors.nin ? "border-red-500" : "border-border"
                       } focus:outline-none focus:ring-2 focus:ring-primary/30`}
                       placeholder="Enter your 11-digit NIN"
-                      maxLength="11"
                     />
                     {errors.nin && (
                       <p className="mt-1 text-sm text-red-500">{errors.nin}</p>
@@ -659,7 +851,7 @@ export default function SignupPage() {
                         errors.bvn ? "border-red-500" : "border-border"
                       } focus:outline-none focus:ring-2 focus:ring-primary/30`}
                       placeholder="Enter your 11-digit BVN"
-                      maxLength="11"
+                      maxLength={11}
                     />
                     {errors.bvn && (
                       <p className="mt-1 text-sm text-red-500">{errors.bvn}</p>
@@ -866,9 +1058,9 @@ export default function SignupPage() {
                       className="text-sm text-foreground/80"
                     >
                       I agree to the{" "}
-                      <a href="#" className="text-primary hover:underline">
+                      <Link href="#" className="text-primary hover:underline">
                         Terms and Conditions
-                      </a>
+                      </Link>
                     </label>
                   </div>
                   {errors.agreeToTerms && (
@@ -893,9 +1085,9 @@ export default function SignupPage() {
                       className="text-sm text-foreground/80"
                     >
                       I agree to the{" "}
-                      <a href="#" className="text-primary hover:underline">
+                      <Link href="#" className="text-primary hover:underline">
                         Privacy Policy
-                      </a>
+                      </Link>
                     </label>
                   </div>
                   {errors.agreeToPrivacy && (
