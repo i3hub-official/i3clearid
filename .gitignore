@@ -43,3 +43,12 @@ next-env.d.ts
 /src/generated/prisma
 
 .vercel
+
+# Prisma generated client
+/src/generated/prisma
+
+# Custom scripts
+/scripts
+
+.vercel
+key-change-log.txt
