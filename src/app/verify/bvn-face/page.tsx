@@ -60,6 +60,9 @@ export default function FaceBVNVerification() {
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const holdStartRef = useRef<number | null>(null);
+  const [ovalColor, setOvalColor] = useState<"yellow" | "red" | "green">(
+    "yellow"
+  );
 
   // ------- Permission flow
   const requestPermissions = async () => {
@@ -577,7 +580,6 @@ export default function FaceBVNVerification() {
                 {/* Human-face overlay (SVG silhouette + guides) */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                   <svg viewBox="0 0 320 400" className="w-64 h-80 opacity-90">
-                    {/* outer oval */}
                     <ellipse
                       cx="160"
                       cy="180"
@@ -588,41 +590,6 @@ export default function FaceBVNVerification() {
                       strokeDasharray="8 10"
                       strokeWidth="3"
                     />
-                    {/* eyes */}
-                    <ellipse
-                      cx="120"
-                      cy="145"
-                      rx="18"
-                      ry="9"
-                      fill="white"
-                      opacity="0.6"
-                    />
-                    <ellipse
-                      cx="200"
-                      cy="145"
-                      rx="18"
-                      ry="9"
-                      fill="white"
-                      opacity="0.6"
-                    />
-                    {/* nose */}
-                    <path
-                      d="M160 150 C160 175 150 185 150 195"
-                      stroke="white"
-                      strokeWidth="3"
-                      fill="none"
-                      opacity="0.6"
-                    />
-                    {/* mouth */}
-                    <path
-                      d="M130 215 Q160 235 190 215"
-                      stroke="white"
-                      strokeWidth="4"
-                      fill="none"
-                      opacity="0.6"
-                    />
-                    {/* center dot */}
-                    <circle cx="160" cy="180" r="4" fill="#f87171" />
                   </svg>
                 </div>
 
