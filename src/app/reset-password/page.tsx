@@ -119,22 +119,22 @@ function ResetPasswordContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 py-8">
-      <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8">
-          <div className="flex justify-between items-start mb-8">
+      <div className="w-full max-w-md lg:max-w-lg bg-card rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 lg:p-8">
+          <div className="flex justify-between items-start mb-6 lg:mb-8">
             <div>
               <div className="flex items-center mb-2">
-                <Shield className="w-8 h-8 text-primary mr-2" />
-                <h1 className="text-2xl font-bold">SecureBankID</h1>
+                <Shield className="w-7 h-7 lg:w-8 lg:h-8 text-primary mr-2" />
+                <h1 className="text-xl lg:text-2xl font-bold">SecureID</h1>
               </div>
-              <p className="text-sm text-foreground/70">
+              <p className="text-xs lg:text-sm text-foreground/70">
                 Bank-verified identity authentication
               </p>
             </div>
 
             <Link
               href="/"
-              className="md:hidden text-primary hover:underline flex items-center text-sm"
+              className="text-primary hover:underline flex items-center text-xs lg:text-sm"
             >
               <Home className="w-4 h-4 mr-1" /> Home
             </Link>
@@ -161,9 +161,9 @@ function ResetPasswordContent() {
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground">
+        <div className="p-6 lg:p-8">
+          <div className="mb-6 lg:mb-8">
+            <h2 className="text-xl lg:text-2xl font-bold text-foreground">
               {verificationStatus === "verifying"
                 ? "Verifying Your Request"
                 : verificationStatus === "success" && resetStatus === "idle"
@@ -172,7 +172,7 @@ function ResetPasswordContent() {
                 ? "Password Reset Successful"
                 : "Verification Failed"}
             </h2>
-            <p className="text-foreground/70 mt-2">
+            <p className="text-foreground/70 mt-2 text-sm lg:text-base">
               {verificationStatus === "verifying"
                 ? "Please wait while we verify your password reset link."
                 : verificationStatus === "success" && resetStatus === "idle"
@@ -184,9 +184,9 @@ function ResetPasswordContent() {
           </div>
 
           {verificationStatus === "verifying" && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-foreground/70">
+            <div className="text-center py-6 lg:py-8">
+              <div className="w-14 h-14 lg:w-16 lg:h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-foreground/70 text-sm lg:text-base">
                 Verifying your reset request...
               </p>
             </div>
@@ -209,7 +209,7 @@ function ResetPasswordContent() {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition"
+                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition text-sm lg:text-base"
                       placeholder="Enter your new password"
                       required
                       minLength={8}
@@ -238,7 +238,7 @@ function ResetPasswordContent() {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition"
+                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition text-sm lg:text-base"
                       placeholder="Confirm your new password"
                       required
                       minLength={8}
@@ -262,7 +262,7 @@ function ResetPasswordContent() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
                 >
                   {isLoading ? (
                     <>
@@ -287,7 +287,7 @@ function ResetPasswordContent() {
                     <CheckCircle className="w-10 h-10 text-primary" />
                   </div>
                 </div>
-                <h3 className="font-medium mb-2 text-foreground">
+                <h3 className="font-medium mb-2 text-foreground text-sm lg:text-base">
                   Password Reset Successful
                 </h3>
                 <p className="text-foreground/70 text-sm mb-4">
@@ -298,7 +298,7 @@ function ResetPasswordContent() {
 
               <Link
                 href="/signin"
-                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center"
+                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center text-sm lg:text-base"
               >
                 Sign In
               </Link>
@@ -313,7 +313,7 @@ function ResetPasswordContent() {
                     <AlertCircle className="w-10 h-10 text-red-500" />
                   </div>
                 </div>
-                <h3 className="font-medium mb-2 text-foreground">
+                <h3 className="font-medium mb-2 text-foreground text-sm lg:text-base">
                   Password Reset Failed
                 </h3>
                 <p className="text-foreground/70 text-sm mb-4">
@@ -324,7 +324,7 @@ function ResetPasswordContent() {
 
               <button
                 onClick={() => setResetStatus("idle")}
-                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center mb-4"
+                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center mb-4 text-sm lg:text-base"
               >
                 Try Again
               </button>
@@ -339,7 +339,7 @@ function ResetPasswordContent() {
                     <AlertCircle className="w-10 h-10 text-red-500" />
                   </div>
                 </div>
-                <h3 className="font-medium mb-2 text-foreground">
+                <h3 className="font-medium mb-2 text-foreground text-sm lg:text-base">
                   Verification Failed
                 </h3>
                 <p className="text-foreground/70 text-sm mb-4">
@@ -351,14 +351,14 @@ function ResetPasswordContent() {
               <div className="space-y-4">
                 <Link
                   href="/forgot-password"
-                  className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center"
+                  className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center text-sm lg:text-base"
                 >
                   <Mail className="w-5 h-5 mr-2" /> Request New Reset Link
                 </Link>
 
                 <Link
                   href="/signin"
-                  className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-primary/5 transition flex items-center justify-center"
+                  className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-primary/5 transition flex items-center justify-center text-sm lg:text-base"
                 >
                   <ArrowLeft className="w-5 h-5 mr-2" /> Back to Sign In
                 </Link>
@@ -367,7 +367,7 @@ function ResetPasswordContent() {
           )}
 
           {/* Desktop back to home link */}
-          <div className="hidden md:flex justify-center mt-6">
+          <div className="flex justify-center mt-6">
             <Link
               href="/"
               className="text-primary hover:underline text-sm flex items-center"

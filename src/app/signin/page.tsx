@@ -129,23 +129,22 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 py-8">
-      <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8">
-          <div className="flex justify-between items-start mb-8">
+      <div className="w-full max-w-md lg:max-w-lg bg-card rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 lg:p-8">
+          <div className="flex justify-between items-start mb-6 lg:mb-8">
             <div>
               <div className="flex items-center mb-2">
-                <Shield className="w-8 h-8 text-primary mr-2" />
-                <h1 className="text-2xl font-bold">SecureID</h1>
+                <Shield className="w-7 h-7 lg:w-8 lg:h-8 text-primary mr-2" />
+                <h1 className="text-xl lg:text-2xl font-bold">SecureID</h1>
               </div>
-              <p className="text-sm text-foreground/70">
-                Government-compliant identity verification
+              <p className="text-xs lg:text-sm text-foreground/70">
+                Bank-verified identity authentication
               </p>
             </div>
 
-            {/* Mobile-only back to home button */}
             <Link
               href="/"
-              className="md:hidden text-primary hover:underline flex items-center text-sm"
+              className="text-primary hover:underline flex items-center text-xs lg:text-sm"
             >
               <Home className="w-4 h-4 mr-1" /> Home
             </Link>
@@ -162,10 +161,12 @@ export default function SignInPage() {
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground">Welcome Back</h2>
-            <p className="text-foreground/70">
+        <div className="p-6 lg:p-8">
+          <div className="mb-6 lg:mb-8">
+            <h2 className="text-xl lg:text-2xl font-bold text-foreground">
+              Welcome Back
+            </h2>
+            <p className="text-foreground/70 text-sm lg:text-base">
               Sign in to your SecureID account
             </p>
           </div>
@@ -188,7 +189,7 @@ export default function SignInPage() {
                   name="identifier"
                   value={formData.identifier}
                   onChange={handleChange}
-                  className={`w-full pl-10 px-4 py-3 rounded-lg border ${
+                  className={`w-full pl-10 px-4 py-3 rounded-lg border text-sm lg:text-base ${
                     errors.identifier ? "border-red-500" : "border-border"
                   } focus:outline-none focus:ring-2 focus:ring-primary/30`}
                   placeholder="Enter your email or phone number"
@@ -245,7 +246,7 @@ export default function SignInPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className={`w-full pl-10 pr-10 py-3 rounded-lg border ${
+                    className={`w-full pl-10 pr-10 py-3 rounded-lg border text-sm lg:text-base ${
                       errors.password ? "border-red-500" : "border-border"
                     } focus:outline-none focus:ring-2 focus:ring-primary/30`}
                     placeholder="Enter your password"
@@ -305,7 +306,7 @@ export default function SignInPage() {
                     type="button"
                     onClick={handlePasskeySignIn}
                     disabled={isSubmitting}
-                    className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-primary/90 transition disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-primary/90 transition disabled:opacity-70 disabled:cursor-not-allowed text-sm lg:text-base"
                   >
                     {isSubmitting ? "Authenticating..." : "Use Passkey"}
                   </button>
@@ -317,7 +318,7 @@ export default function SignInPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm lg:text-base"
               >
                 {isSubmitting ? (
                   <>
@@ -346,7 +347,7 @@ export default function SignInPage() {
           </div>
 
           {/* Desktop back to home link */}
-          <div className="hidden md:flex justify-center mt-6">
+          <div className="flex justify-center mt-6">
             <Link
               href="/"
               className="text-primary hover:underline text-sm flex items-center"

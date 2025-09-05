@@ -1,0 +1,44 @@
+1. SESSION_SECRET (32 bytes hex string)
+Used for signing sessions/JWTs.
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+
+2. ENCRYPTION_KEY (32 bytes hex for AES-256)
+Also 32 random bytes — must be the same length as above for AES-256.
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+
+3. HASH_PEPPER (random string added to hashes)
+Length can vary, but 16–32 bytes is safe.
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+
+
+4. FIXED_IV_EMAIL / FIXED_IV_PHONE (AES IVs — 16 bytes base64)
+AES IVs must be exactly 16 bytes for AES-256-CBC. We’re storing them as base64 so they’re env-safe.
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+
+Run that twice for FIXED_IV_EMAIL and FIXED_IV_PHONE.
+
+5. SALT_ROUNDS (bcrypt cost factor)
+No crypto here — just an integer.
+10 = decent speed & security
+12 = slower, stronger
+
+# In .env
+SALT_ROUNDS=12
+
+
+# SINGLE NODE FOR ALL
+const crypto = require('crypto');
+
+const randHex = (bytes) => crypto.randomBytes(bytes).toString('hex');
+
+console.log(`# --- GENERATED SECURE ENV VALUES ---
+SESSION_SECRET=${randHex(32)}
+ENCRYPTION_KEY=${randHex(32)}
+HASH_PEPPER=${randHex(16)}
+FIXED_IV_EMAIL=${randHex(16)}
+FIXED_IV_PHONE=${randHex(16)}
+SALT_ROUNDS=12
+`);
+console.log('RANDOMS GENERATION COMPLETED')

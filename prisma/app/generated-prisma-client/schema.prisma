@@ -1,0 +1,435 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./app/generated-prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DATABASE_URL")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  action    AuditAction // Using enum instead of String
+  details   String?
+  ipAddress String      @default("unknown")
+  userAgent String      @default("unknown")
+  status    AuditStatus @default(SUCCESS)
+  severity  Severity    @default(MEDIUM)
+  metadata  Json?
+  createdAt DateTime    @default(now())
+  expiresAt DateTime?   @default(dbgenerated("(NOW() + interval '7 years')")) // GDPR compliance
+
+  // Enhanced relationships
+  agentId    String?
+  agent      Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  targetId   String? // ID of affected resource
+  targetType String? // Type of affected resource (e.g., "ACCOUNT", "DATA")
+
+  // Indexes (optimized for common queries)
+  @@index([action])
+  @@index([agentId])
+  @@index([createdAt])
+  @@index([severity])
+  @@index([status])
+  @@index([targetId, targetType])
+  // Data retention policy
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  ACCOUNT_DELETION_REQUEST
+  ACCOUNT_DEACTIVATION
+  LOGIN_ATTEMPT
+  LOGIN_SUCCESS
+  PASSWORD_CHANGE
+  PASSWORD_RESET
+  DATA_EXPORT
+  DATA_DELETION
+  PERMISSION_CHANGE
+  SYSTEM_EVENT
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILED
+  PENDING
+  REVERTED
+}
+
+enum Severity {
+  LOW // Informational (e.g., login success)
+  MEDIUM // Security-relevant (e.g., password change)
+  HIGH // Sensitive action (e.g., account deactivation)
+  CRITICAL // Destructive action (e.g., account deletion)
+}
+
+model Agent {
+  id                 String    @id @default(uuid())
+  fieldId            String
+  surname            String
+  firstName          String
+  otherName          String
+  gender             String?
+  dob                DateTime?
+  email              String    @unique
+  phone              String    @unique
+  nin                String?   @unique
+  bvn                String?   @unique
+  state              String
+  lga                String
+  address            String
+  emailHash          String    @unique
+  phoneHash          String    @unique
+  ninHash            String    @unique
+  bvnHash            String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+  lastLoginAt        DateTime?
+  lastLoginAttemptIp String?
+  isActive           Boolean   @default(true)
+  admittedAt         DateTime?
+  deletedAt          DateTime?
+  deletionReason     String?
+  deactivatedAt      DateTime?
+  deactivationReason String?
+  avatarUrl          String    @default("")
+  status             String    @default("ACTIVE") // "ACTIVE", "DEACTIVATED", "PENDING_DELETION", "DELETED"
+
+  profile               AgentProfile?
+  sessions              AgentSession[]
+  oauthAccounts         OAuthAccount[]
+  PasswordResetToken    PasswordResetToken[]
+  PasswordResetEvent    PasswordResetEvent[]
+  AuditLog              AuditLog[]
+  DeletionSchedule      DeletionSchedule[]
+  AccountLock           AccountLock?
+  FailedAttempt         FailedAttempt[]
+  FailedDeletionAttempt FailedDeletionAttempt[]
+  VerificationStatus    VerificationStatus[]
+
+  @@index([emailHash])
+  @@index([phoneHash])
+  @@index([ninHash])
+  @@index([state])
+  @@index([lga])
+  @@index([createdAt])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("agent")
+}
+
+model AgentProfile {
+  id                     String    @id @default(uuid())
+  agentId                String    @unique
+  email                  String
+  emailHash              String    @unique
+  phone                  String
+  phoneHash              String    @unique
+  pin                    String    @default("")
+  pinHash                String    @default("")
+  passwordHash           String
+  emailVerified          DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt
+  passwordResetAttempts  Int?
+  accountLockedUntil     DateTime?
+  isLocked               Boolean   @default(false)
+  lockoutCount           Int       @default(0)
+  lockedUntil            DateTime?
+  lastPasswordResetAt    DateTime?
+  avatarUrl              String    @default("")
+  failedDeletionAttempts DateTime?
+  deletionLockedUntil    DateTime?
+  deletionLockoutCount   Int       @default(0)
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  PasswordResetToken PasswordResetToken[]
+
+  @@index([agentId])
+  @@index([phoneHash])
+  @@index([emailHash])
+  @@index([pinHash])
+  @@index([createdAt])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("agent_profile")
+}
+
+model AgentSession {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  agentId   String
+  agent     Agent     @relation(fields: [agentId], references: [id])
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([agentId])
+  @@index([expiresAt])
+}
+
+enum AgentStatus {
+  ACTIVE
+  DEACTIVATED
+  PENDING_DELETION
+  DELETED
+}
+
+model DeletionSchedule {
+  id           String    @id @default(cuid())
+  agentId      String
+  agent        Agent     @relation(fields: [agentId], references: [id])
+  scheduledAt  DateTime
+  deletionType String // "FULL_ACCOUNT" or "DATA_ONLY"
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([agentId])
+  @@index([scheduledAt])
+}
+
+model VerificationStatus {
+  id      String @id @default(cuid())
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  emailVerified        Boolean   @default(false)
+  emailVerifiedDate    DateTime?
+  phoneVerified        Boolean   @default(false)
+  phoneVerifiedDate    DateTime?
+  ninVerified          Boolean   @default(false)
+  ninVerifiedDate      DateTime?
+  bvnVerified          Boolean   @default(false)
+  bvnVerifiedDate      DateTime?
+  documentVerified     Boolean   @default(false) // e.g. driver’s license / passport from API
+  documentVerifiedDate DateTime?
+  dobVerified          Boolean   @default(false)
+  dobVerifiedDate      DateTime?
+  genderVerified       Boolean   @default(false)
+  genderVerifiedDate   DateTime?
+  nameVerified         Boolean   @default(false)
+  nameVerificationDate DateTime?
+
+  lastCheckedAt DateTime? // when last verified against an agency
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([emailVerified])
+  @@index([phoneVerified])
+  @@index([ninVerified])
+  @@index([bvnVerified])
+  @@index([dobVerified])
+  @@index([genderVerified])
+  @@index([documentVerified])
+  @@index([lastCheckedAt])
+  @@index([emailVerifiedDate])
+  @@index([phoneVerifiedDate])
+  @@index([ninVerifiedDate])
+  @@index([bvnVerifiedDate])
+  @@index([dobVerifiedDate])
+  @@index([genderVerifiedDate])
+  @@index([documentVerifiedDate])
+  @@map("verification_status")
+}
+
+model FailedAttempt {
+  id        String   @id @default(cuid())
+  agentId   String // Reference to the agent account
+  action    String // Type of action (e.g., "LOGIN", "ACCOUNT_DELETION", "PIN_VERIFICATION")
+  details   String? // Additional context about the failure
+  ipAddress String // IP address where attempt originated
+  userAgent String? // Browser/device information
+  createdAt DateTime @default(now())
+  attempts  Int      @default(0) // Number of attempts before lockout
+
+  // Relations
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Indexes for efficient querying
+  @@index([agentId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([ipAddress])
+  // Data retention policy (90 days for failed attempts, longer for compliance cases)
+  @@map("failed_attempts")
+}
+
+model FailedDeletionAttempt {
+  id        String   @id @default(cuid())
+  agentId   String
+  action    String   @default("ACCOUNT_DELETION")
+  ipAddress String
+  userAgent String?
+  attempts  Int      @default(0)
+  details   String? // "Invalid PIN", "Invalid Password", etc.
+  createdAt DateTime @default(now())
+
+  // Relations
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([agentId])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("failed_deletion_attempts")
+}
+
+model AccountLock {
+  id        String   @id @default(cuid())
+  agentId   String   @unique // References the agent account
+  reason    String? // Reason for lock (e.g., "Too many failed attempts")
+  expiresAt DateTime // When the lock will automatically expire
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String? // IP address that triggered the lock
+  action    String? // What action caused the lock (e.g., "ACCOUNT_DELETION")
+  userAgent String?
+  // Relation to agent (optional but recommended)
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Indexes for efficient querying
+  @@index([agentId])
+  @@index([expiresAt])
+  @@index([action])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("account_locks")
+}
+
+model PasswordResetToken {
+  id             String        @id @default(cuid())
+  tokenHash      String        @unique
+  agentId        String
+  agent          Agent         @relation(fields: [agentId], references: [id])
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  usedAt         DateTime?
+  AgentProfile   AgentProfile? @relation(fields: [agentProfileId], references: [id])
+  agentProfileId String?
+
+  @@index([agentId])
+  @@index([expiresAt])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("password_reset_token")
+}
+
+model PasswordResetEvent {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  createdAt DateTime @default(now())
+  ipAddress String
+  userAgent String?
+
+  @@index([agentId, createdAt])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("password_reset_event")
+}
+
+model User {
+  id                String       @id @default(cuid())
+  username          String       @unique
+  passwordHash      String
+  email             String       @unique
+  verified          Boolean      @default(false) // Changed from Int to Boolean
+  fullName          String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now()) @updatedAt
+  bio               String       @default("")
+  country           String       @default("")
+  state             String       @default("")
+  city              String       @default("")
+  address           String       @default("")
+  phoneNumber       String       @unique
+  phoneVerified     Boolean      @default(false)
+  hasPin            Boolean      @default(false)
+  pinHash           String?
+  isBanned          Boolean      @default(false)
+  passwordChangedAt DateTime?
+  role              UserRoleEnum @default(USER)
+  sessions          Session[]
+  roles             UserRole?
+
+  @@index([username])
+  @@index([email])
+  @@index([phoneNumber])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([country])
+  @@index([state])
+  @@index([city])
+  @@index([address])
+  @@index([bio])
+  @@index([phoneVerified])
+  @@index([hasPin])
+  @@index([isBanned])
+  @@index([passwordChangedAt])
+  @@map("user")
+}
+
+enum UserRoleEnum {
+  ADMIN
+  AGENT
+  USER
+}
+
+model UserRole {
+  id   String       @id
+  role UserRoleEnum @default(AGENT)
+  user User         @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("user_role")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  userAgent String?
+  ipAddress String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+model OAuthAccount {
+  id         String   @id @default(cuid())
+  provider   String
+  providerId String
+  agentId    String
+  createdAt  DateTime @default(now())
+  agent      Agent    @relation(fields: [agentId], references: [id])
+
+  @@unique([provider, providerId])
+  // Automatic data retention policy (7 years for compliance)
+  @@map("oauth_account")
+}
+
+model SessionCleanupLog {
+  id      String   @id @default(cuid())
+  removed Int
+  runAt   DateTime @default(now())
+
+  @@map("session_cleanup_log")
+}
+
+model SessionCleanupConfig {
+  id                 String   @id @default(cuid())
+  cleanupProbability Float    @default(0.1) // 10% chance of cleanup per request
+  maxLifetimeHours   Int      @default(48) // hard kill sessions older than 48 hours
+  lastRunAt          DateTime @default(now())
+
+  @@map("session_cleanup_config")
+}

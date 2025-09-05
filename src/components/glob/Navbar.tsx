@@ -209,7 +209,7 @@ export default function Navbar() {
                 {/* Sign In button */}
                 <Link
                   href="/signin"
-                  className="block bg-transparent hover:bg-primary/10 text-foreground font-medium py-2 px-4 rounded-md transition flex items-center justify-center"
+                  className="block bg-transparent hover:bg-primary/10 text-foreground font-medium py-2 px-4 rounded-md transition items-center justify-center"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <User className="w-4 h-4 mr-2" /> Sign In
