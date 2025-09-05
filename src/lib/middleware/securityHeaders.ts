@@ -23,11 +23,24 @@ export async function withSecurityHeaders(): Promise<NextResponse> {
     .map(([key, values]) => {
       // Convert camelCase to kebab-case for the header
       const directive = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-      return `${directive} ${values.join(" ")}`;
+
+      // Handle boolean values (like upgradeInsecureRequests and blockAllMixedContent)
+      if (typeof values === "boolean") {
+        return values ? directive : null;
+      }
+
+      // Handle array values (most directives)
+      if (Array.isArray(values)) {
+        return `${directive} ${values.join(" ")}`;
+      }
+
+      // Handle string values (if any)
+      return `${directive} ${values}`;
     })
+    .filter(Boolean) // Remove any null entries from boolean false values
     .join("; ");
+
   res.headers.set("Content-Security-Policy", cspDirectives);
 
   return res;
 }
-

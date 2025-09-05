@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import {
   Camera,
   User,
@@ -12,18 +14,31 @@ import {
   ArrowLeft,
   Mic,
   MapPin,
-  Video,
 } from "lucide-react";
-import Link from "next/link";
+
+/**
+ * Key improvements
+ * - Robust webcam start/stop with full cleanup (streams, RAF loops, timeouts)
+ * - Cancel button reliably aborts any pending work and resets UI
+ * - Controls are disabled/hidden during verification to prevent double actions
+ * - Human-face overlay (SVG silhouette + guides)
+ * - Live preview tile + captured preview displayed in the preview container
+ * - Auto-capture when a face is centered and large enough (via FaceDetector API if available; graceful fallback)
+ */
 
 export default function FaceBVNVerification() {
-  const [step, setStep] = useState<
-    "intro" | "permissions" | "camera" | "processing" | "success" | "error"
-  >("intro");
+  type Step =
+    | "intro"
+    | "permissions"
+    | "camera"
+    | "processing"
+    | "success"
+    | "error";
+  type VStatus = "idle" | "verifying" | "success" | "error";
+
+  const [step, setStep] = useState<Step>("intro");
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [verificationStatus, setVerificationStatus] = useState<
-    "idle" | "verifying" | "success" | "error"
-  >("idle");
+  const [verificationStatus, setVerificationStatus] = useState<VStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
@@ -33,24 +48,32 @@ export default function FaceBVNVerification() {
     microphone: false,
     location: false,
   });
+  const [autoCapture, setAutoCapture] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
+  const [faceHint, setFaceHint] = useState<string | null>(null);
+  const [isHoldingSteady, setIsHoldingSteady] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const autoCaptureTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const holdStartRef = useRef<number | null>(null);
 
-  // Check and request permissions
+  // ------- Permission flow
   const requestPermissions = async () => {
     try {
       setStep("permissions");
 
-      // Request camera access
+      // CAMERA
       try {
-        const cameraStream = await navigator.mediaDevices.getUserMedia({
+        const s = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
         });
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setPermissions((prev) => ({ ...prev, camera: true }));
+        s.getTracks().forEach((t) => t.stop());
+        setPermissions((p) => ({ ...p, camera: true }));
       } catch (err) {
         console.error("Camera permission denied:", err);
         setErrorMessage(
@@ -60,37 +83,34 @@ export default function FaceBVNVerification() {
         return;
       }
 
-      // Request microphone access (for liveness detection)
+      // MICROPHONE (optional)
       try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
+        const s = await navigator.mediaDevices.getUserMedia({
           video: false,
           audio: true,
         });
-        micStream.getTracks().forEach((track) => track.stop());
-        setPermissions((prev) => ({ ...prev, microphone: true }));
+        s.getTracks().forEach((t) => t.stop());
+        setPermissions((p) => ({ ...p, microphone: true }));
       } catch (err) {
         console.warn("Microphone permission denied:", err);
-        // Continue without microphone as it's not critical for basic verification
       }
 
-      // Request location access (for security purposes)
+      // LOCATION (optional)
       if ("geolocation" in navigator) {
         try {
-          await new Promise((resolve, reject) => {
+          await new Promise((resolve, reject) =>
             navigator.geolocation.getCurrentPosition(resolve, reject, {
               enableHighAccuracy: false,
               timeout: 5000,
               maximumAge: 300000,
-            });
-          });
-          setPermissions((prev) => ({ ...prev, location: true }));
+            })
+          );
+          setPermissions((p) => ({ ...p, location: true }));
         } catch (err) {
           console.warn("Location permission denied:", err);
-          // Continue without location as it's not critical for verification
         }
       }
 
-      // After permissions are handled, proceed to camera
       setStep("camera");
       initializeCamera();
     } catch (error) {
@@ -102,22 +122,42 @@ export default function FaceBVNVerification() {
     }
   };
 
-  // Initialize camera
+  // ------- Camera setup / teardown
   const initializeCamera = async () => {
     try {
+      // Stop any existing stream first
+      stopCameraStream();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
+        audio: false,
       });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-      }
-      setIsCameraActive(true);
+      if (!videoRef.current) return;
+
+      videoRef.current.srcObject = stream;
+      // Helpful attributes for mobile autoplay policies
+      videoRef.current.setAttribute("playsinline", "true");
+      videoRef.current.muted = true;
+
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current
+          ?.play()
+          .then(() => {
+            streamRef.current = stream;
+            setIsCameraActive(true);
+            startDetectionLoop();
+          })
+          .catch((err) => {
+            console.error("Error playing video:", err);
+            setErrorMessage("Failed to start camera. Please try again.");
+            setStep("error");
+          });
+      };
     } catch (error) {
       console.error("Error accessing camera:", error);
       setErrorMessage(
@@ -127,56 +167,153 @@ export default function FaceBVNVerification() {
     }
   };
 
-  // Capture photo
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d");
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
 
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+  // ------- Detection & Auto-capture
+  const startDetectionLoop = () => {
+    cancelDetectionLoop();
 
-      // Draw current video frame to canvas
-      context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const FaceDetectorCtor: typeof FaceDetector | undefined = (
+      window as typeof window
+    ).FaceDetector;
+    const hasFaceDetector = typeof FaceDetectorCtor === "function";
+    const detector = hasFaceDetector
+      ? new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 1 })
+      : null;
 
-      // Get image data URL
-      const imageData = canvas.toDataURL("image/png");
-      setCapturedImage(imageData);
+    const HOLD_MS = 1200; // require steady face for this long before auto-capture
+    const MIN_BOX_RATIO = 0.22; // min face box height relative to video height
 
-      // Stop camera
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        setIsCameraActive(false);
+    const loop = async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
       }
 
-      // Start countdown before processing
-      setIsCounting(true);
+      const video = videoRef.current;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+
+      let faceOk = false;
+
+      if (hasFaceDetector && detector) {
+        try {
+          const faces: Array<{
+            boundingBox: DOMRectReadOnly;
+            landmarks?: Array<{ x: number; y: number }>;
+          }> = await detector.detect(video);
+          if (faces && faces.length > 0) {
+            const box = faces[0].boundingBox as DOMRectReadOnly;
+            const centerX = box.x + box.width / 2;
+            const centerY = box.y + box.height / 2;
+
+            const centeredX = centerX > vw * 0.35 && centerX < vw * 0.65;
+            const centeredY = centerY > vh * 0.3 && centerY < vh * 0.7;
+            const bigEnough = box.height / vh >= MIN_BOX_RATIO;
+
+            faceOk = centeredX && centeredY && bigEnough;
+            setFaceHint(
+              faceOk
+                ? "Hold still… capturing"
+                : !bigEnough
+                ? "Move closer"
+                : "Center your face"
+            );
+          } else {
+            setFaceHint("We can’t see your face");
+          }
+        } catch {
+          console.warn("FaceDetector error/fallback");
+        }
+      } else {
+        setFaceHint("Align your face within the oval");
+      }
+
+      const now = performance.now();
+      if (autoCapture && faceOk) {
+        if (holdStartRef.current == null) holdStartRef.current = now;
+        const heldFor = now - (holdStartRef.current ?? now);
+        setIsHoldingSteady(heldFor >= HOLD_MS * 0.5);
+        if (heldFor >= HOLD_MS && step === "camera" && !isCounting) {
+          capturePhoto();
+        }
+      } else {
+        holdStartRef.current = null;
+        setIsHoldingSteady(false);
+      }
+
+      rafRef.current = requestAnimationFrame(loop);
+    };
+
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  const cancelDetectionLoop = () => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
   };
 
-  // Countdown effect
+  // ------- Capture
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (video.readyState < 2) return; // HAVE_CURRENT_DATA
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // match canvas to video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Mirror drawing (to match user-facing preview)
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    const imageData = canvas.toDataURL("image/png");
+    setCapturedImage(imageData);
+    setShowPreview(true);
+
+    // Stop camera and detection to freeze the frame
+    cancelDetectionLoop();
+    stopCameraStream();
+
+    // Begin countdown to processing
+    setIsCounting(true);
+  };
+
+  // ------- Verification simulation
   useEffect(() => {
     if (isCounting && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (isCounting && countdown === 0) {
+    }
+
+    if (isCounting && countdown === 0) {
       setIsCounting(false);
       setCountdown(3);
       processVerification();
     }
   }, [isCounting, countdown]);
 
-  // Process verification
   const processVerification = () => {
     setStep("processing");
     setVerificationStatus("verifying");
 
     // Simulate API call
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.2; // 80% success rate for demo
-
+    processingTimeoutRef.current = setTimeout(() => {
+      const isSuccess = Math.random() > 0.2;
       if (isSuccess) {
         setVerificationStatus("success");
         setStep("success");
@@ -187,31 +324,68 @@ export default function FaceBVNVerification() {
         setVerificationStatus("error");
         setStep("error");
       }
-    }, 3000);
+      processingTimeoutRef.current = null;
+    }, 2000);
   };
 
-  // Retry verification
+  // ------- Retry / Start / Cancel
   const handleRetry = () => {
     setStep("camera");
     setVerificationStatus("idle");
     setErrorMessage("");
     setCapturedImage(null);
+    setShowPreview(false);
+    holdStartRef.current = null;
     initializeCamera();
   };
 
-  // Start verification
   const startVerification = () => {
     requestPermissions();
   };
 
-  // Clean up camera on unmount
+  const cleanupEverything = () => {
+    // stop timers/timeouts
+    if (autoCaptureTimeoutRef.current) {
+      clearTimeout(autoCaptureTimeoutRef.current);
+      autoCaptureTimeoutRef.current = null;
+    }
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+      processingTimeoutRef.current = null;
+    }
+
+    // stop countdown
+    setIsCounting(false);
+    setCountdown(3);
+
+    // stop camera + detection
+    cancelDetectionLoop();
+    stopCameraStream();
+
+    // reset state
+    setCapturedImage(null);
+    setShowPreview(false);
+    setVerificationStatus("idle");
+    setErrorMessage("");
+    holdStartRef.current = null;
+    setFaceHint(null);
+    setIsHoldingSteady(false);
+
+    // return to intro
+    setStep("intro");
+  };
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      cleanupEverything();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ------- UI helpers
+  const controlsDisabled =
+    step === "processing" || verificationStatus === "verifying" || isCounting;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
@@ -228,7 +402,6 @@ export default function FaceBVNVerification() {
                 Bank-verified identity authentication
               </p>
             </div>
-
             <Link
               href="/"
               className="md:hidden text-primary hover:underline flex items-center text-sm"
@@ -255,7 +428,6 @@ export default function FaceBVNVerification() {
               <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
                 <Camera className="h-10 w-10 text-primary" />
               </div>
-
               <h3 className="text-xl font-bold text-foreground mb-3">
                 BVN Face Verification
               </h3>
@@ -301,23 +473,28 @@ export default function FaceBVNVerification() {
                 </ul>
               </div>
 
-              <div className="bg-blue-50 rounded-lg p-4 text-left mb-6 border border-blue-100">
-                <h4 className="font-medium text-blue-700 mb-2 flex items-center">
-                  <Shield className="h-4 w-4 mr-1" /> Security Assurance
-                </h4>
-                <p className="text-blue-600 text-sm">
-                  Your biometric data is encrypted, processed securely, and
-                  never stored. This verification is conducted in partnership
-                  with your bank.
-                </p>
+              {/* Auto-capture option */}
+              <div className="flex items-center mb-4 justify-center">
+                <input
+                  type="checkbox"
+                  id="autoCapture"
+                  checked={autoCapture}
+                  onChange={(e) => setAutoCapture(e.target.checked)}
+                  className="mr-2 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="autoCapture"
+                  className="text-sm text-foreground/80"
+                >
+                  Enable auto-capture when your face is centered
+                </label>
               </div>
 
               <button
                 onClick={startVerification}
                 className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
-                <Camera className="h-5 w-5 mr-2" />
-                Allow Access & Continue
+                <Camera className="h-5 w-5 mr-2" /> Allow Access & Continue
               </button>
 
               <Link
@@ -334,7 +511,6 @@ export default function FaceBVNVerification() {
               <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
                 <Shield className="h-10 w-10 text-primary" />
               </div>
-
               <h3 className="text-xl font-bold text-foreground mb-3">
                 Requesting Permissions
               </h3>
@@ -366,8 +542,8 @@ export default function FaceBVNVerification() {
                 <p className="text-amber-700 text-sm flex items-start">
                   <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                   <span>
-                    If you don&apos;t see permission prompts, check your
-                    browser&apos;s address bar for camera/microphone icons.
+                    If you don’t see permission prompts, check the address bar
+                    for camera/microphone icons.
                   </span>
                 </p>
               </div>
@@ -380,74 +556,139 @@ export default function FaceBVNVerification() {
 
           {step === "camera" && (
             <div className="text-center py-2">
-              <h3 className="text-xl font-bold text-foreground mb-4">
+              <h3 className="text-xl font-bold text-foreground mb-2">
                 BVN Face Verification
               </h3>
               <p className="text-foreground/70 mb-4">
-                Position your face in the center of the frame for verification
+                Position your face inside the oval. Good light helps.
               </p>
 
-              <div className="relative bg-border rounded-lg overflow-hidden mb-4 aspect-[3/4]">
-                {isCameraActive ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-foreground/50">
-                      Initializing camera...
-                    </div>
+              <div className="relative bg-gray-200 rounded-lg overflow-hidden mb-4 aspect-[3/4]">
+                {/* Live video */}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+
+                {/* Human-face overlay (SVG silhouette + guides) */}
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <svg viewBox="0 0 320 400" className="w-64 h-80 opacity-90">
+                    {/* outer oval */}
+                    <ellipse
+                      cx="160"
+                      cy="180"
+                      rx="120"
+                      ry="160"
+                      fill="none"
+                      stroke="white"
+                      strokeDasharray="8 10"
+                      strokeWidth="3"
+                    />
+                    {/* eyes */}
+                    <ellipse
+                      cx="120"
+                      cy="145"
+                      rx="18"
+                      ry="9"
+                      fill="white"
+                      opacity="0.6"
+                    />
+                    <ellipse
+                      cx="200"
+                      cy="145"
+                      rx="18"
+                      ry="9"
+                      fill="white"
+                      opacity="0.6"
+                    />
+                    {/* nose */}
+                    <path
+                      d="M160 150 C160 175 150 185 150 195"
+                      stroke="white"
+                      strokeWidth="3"
+                      fill="none"
+                      opacity="0.6"
+                    />
+                    {/* mouth */}
+                    <path
+                      d="M130 215 Q160 235 190 215"
+                      stroke="white"
+                      strokeWidth="4"
+                      fill="none"
+                      opacity="0.6"
+                    />
+                    {/* center dot */}
+                    <circle cx="160" cy="180" r="4" fill="#f87171" />
+                  </svg>
+                </div>
+
+                {/* subtle status chip */}
+                {faceHint && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">
+                    {faceHint}
                   </div>
                 )}
-
-                {/* Face guide overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="border-2 border-white border-dashed rounded-full h-48 w-48 flex items-center justify-center">
-                    <div className="bg-white/20 rounded-full h-40 w-40"></div>
-                  </div>
-                </div>
 
                 <canvas ref={canvasRef} className="hidden" />
               </div>
 
+              {/* Preview box always present; shows live placeholder until capture */}
+              <div className="mb-4">
+                <p className="text-sm text-foreground/70 mb-2">Preview:</p>
+                <div className="relative mx-auto w-32 h-32 border border-border rounded-lg overflow-hidden bg-muted">
+                  {capturedImage ? (
+                    <Image
+                      src={capturedImage}
+                      alt="Captured face preview"
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-foreground/50">
+                      Image will appear here
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="bg-primary/5 rounded-lg p-3 mb-4">
                 <p className="text-xs text-foreground/70">
-                  <strong>Verification in progress:</strong> This image will be
-                  compared to your BVN records for identity verification.
+                  <strong>Verification in progress:</strong> Your image will be
+                  compared with your BVN records.
                 </p>
               </div>
 
               <button
                 onClick={capturePhoto}
-                disabled={!isCameraActive}
+                disabled={!isCameraActive || isCounting || controlsDisabled}
                 className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
               >
-                {isCounting ? `Verifying in ${countdown}...` : "Capture Image"}
+                {isCounting
+                  ? `Verifying in ${countdown}…`
+                  : isHoldingSteady
+                  ? "Hold still… capturing"
+                  : "Capture Image"}
               </button>
 
-              <button
-                onClick={() => {
-                  if (streamRef.current) {
-                    streamRef.current
-                      .getTracks()
-                      .forEach((track) => track.stop());
-                  }
-                  setStep("intro");
-                }}
-                className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
-              >
-                Cancel Verification
-              </button>
+              {/* Cancel hidden/disabled during verification */}
+              {!controlsDisabled && (
+                <button
+                  onClick={cleanupEverything}
+                  className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
+                >
+                  Cancel Verification
+                </button>
+              )}
             </div>
           )}
 
           {step === "processing" && (
             <div className="text-center py-8">
-              {verificationStatus === "verifying" ? (
+              {verificationStatus === "verifying" && (
                 <>
                   <div className="relative mb-6">
                     <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
@@ -457,20 +698,17 @@ export default function FaceBVNVerification() {
                       <User className="h-8 w-8 text-primary" />
                     </div>
                   </div>
-
                   <h3 className="text-xl font-bold text-foreground mb-2">
                     Verifying Your BVN
                   </h3>
                   <p className="text-foreground/70">
-                    Comparing your facial data with your bank&apos;s BVN
-                    records...
+                    Comparing your facial data with your bank’s BVN records…
                   </p>
-
                   <div className="mt-6 bg-border rounded-full h-2">
                     <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           )}
 
@@ -479,7 +717,6 @@ export default function FaceBVNVerification() {
               <div className="bg-green-100 rounded-full p-4 inline-flex mb-6">
                 <CheckCircle className="h-12 w-12 text-green-600" />
               </div>
-
               <h3 className="text-xl font-bold text-foreground mb-2">
                 BVN Verification Successful!
               </h3>
@@ -487,7 +724,6 @@ export default function FaceBVNVerification() {
                 Your Bank Verification Number has been successfully verified
                 using facial recognition.
               </p>
-
               <div className="bg-primary/5 rounded-lg p-4 mb-6">
                 <h4 className="font-medium text-foreground mb-2">
                   Verification Details
@@ -511,7 +747,6 @@ export default function FaceBVNVerification() {
                   </div>
                 </div>
               </div>
-
               <Link
                 href="/dashboard"
                 className="block w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors"
@@ -526,7 +761,6 @@ export default function FaceBVNVerification() {
               <div className="bg-red-100 rounded-full p-4 inline-flex mb-6">
                 <AlertCircle className="h-12 w-12 text-red-600" />
               </div>
-
               <h3 className="text-xl font-bold text-foreground mb-2">
                 BVN Verification Failed
               </h3>
@@ -537,11 +771,14 @@ export default function FaceBVNVerification() {
                   <p className="text-sm text-foreground/50 mb-2">
                     Captured Image:
                   </p>
-                  <img
-                    src={capturedImage}
-                    alt="Captured face"
-                    className="mx-auto rounded-lg border border-border max-h-40"
-                  />
+                  <div className="relative mx-auto w-40 h-40 border border-border rounded-lg overflow-hidden">
+                    <Image
+                      src={capturedImage}
+                      alt="Captured face"
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -550,16 +787,13 @@ export default function FaceBVNVerification() {
                   onClick={handleRetry}
                   className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
-                  <RotateCw className="h-5 w-5 mr-2" />
-                  Try Again
+                  <RotateCw className="h-5 w-5 mr-2" /> Try Again
                 </button>
-
                 <Link
                   href="/verify/verification-options"
                   className="flex-1 border border-border hover:bg-primary/5 text-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
-                  <ArrowLeft className="h-5 w-5 mr-2" />
-                  Other Method
+                  <ArrowLeft className="h-5 w-5 mr-2" /> Other Method
                 </Link>
               </div>
             </div>
