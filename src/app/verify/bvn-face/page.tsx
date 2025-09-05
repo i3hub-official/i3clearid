@@ -366,8 +366,8 @@ export default function FaceBVNVerification() {
                 <p className="text-amber-700 text-sm flex items-start">
                   <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                   <span>
-                    If you don&apos;t see permission prompts, check your browser&apos;s
-                    address bar for camera/microphone icons.
+                    If you don&apos;t see permission prompts, check your
+                    browser&apos;s address bar for camera/microphone icons.
                   </span>
                 </p>
               </div>
@@ -462,7 +462,8 @@ export default function FaceBVNVerification() {
                     Verifying Your BVN
                   </h3>
                   <p className="text-foreground/70">
-                    Comparing your facial data with your bank&apos;s BVN records...
+                    Comparing your facial data with your bank&apos;s BVN
+                    records...
                   </p>
 
                   <div className="mt-6 bg-border rounded-full h-2">
@@ -554,7 +555,7 @@ export default function FaceBVNVerification() {
                 </button>
 
                 <Link
-                  href="/bvn-verification"
+                  href="/verify/verification-options"
                   className="flex-1 border border-border hover:bg-primary/5 text-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
                   <ArrowLeft className="h-5 w-5 mr-2" />

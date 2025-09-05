@@ -10,15 +10,21 @@ import {
   RotateCw,
   Home,
   ArrowLeft,
-  Mic,
-  MapPin,
   FileText,
+  HelpCircle,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 
 export default function FaceNINVerification() {
   const [step, setStep] = useState<
-    "intro" | "permissions" | "camera" | "processing" | "success" | "error"
+    | "intro"
+    | "permissions"
+    | "camera"
+    | "processing"
+    | "success"
+    | "error"
+    | "permission-help"
   >("intro");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -28,75 +34,72 @@ export default function FaceNINVerification() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [isCounting, setIsCounting] = useState(false);
-  const [permissions, setPermissions] = useState({
-    camera: false,
-    microphone: false,
-    location: false,
-  });
+  const [browser, setBrowser] = useState<
+    "chrome" | "firefox" | "safari" | "edge" | "other"
+  >("chrome");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Detect browser on component mount
+  useEffect(() => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.indexOf("chrome") > -1 && !(userAgent.indexOf("edg") > -1)) {
+      setBrowser("chrome");
+    } else if (
+      userAgent.indexOf("safari") > -1 &&
+      userAgent.indexOf("chrome") === -1
+    ) {
+      setBrowser("safari");
+    } else if (userAgent.indexOf("firefox") > -1) {
+      setBrowser("firefox");
+    } else if (userAgent.indexOf("edg") > -1) {
+      setBrowser("edge");
+    } else {
+      setBrowser("other");
+    }
+  }, []);
 
   // Check and request permissions
   const requestPermissions = async () => {
     try {
       setStep("permissions");
 
-      // Request camera access
-      try {
-        const cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setPermissions((prev) => ({ ...prev, camera: true }));
-      } catch (err) {
-        console.error("Camera permission denied:", err);
+      // Check if the browser supports the mediaDevices API
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setErrorMessage(
-          "Camera access is required for NIN verification. Please enable camera permissions in your browser settings."
+          "Your browser doesn't support camera access. Please try using a modern browser like Chrome, Firefox, or Safari."
         );
         setStep("error");
         return;
       }
 
-      // Request microphone access (for liveness detection)
+      // Request camera access
       try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          video: false,
-          audio: true,
+        // Just test if we can get permission, but don't keep the stream yet
+        const testStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
         });
-        micStream.getTracks().forEach((track) => track.stop());
-        setPermissions((prev) => ({ ...prev, microphone: true }));
+
+        // Immediately stop the test stream
+        testStream.getTracks().forEach((track) => track.stop());
+
+        // Now proceed to initialize the actual camera
+        setStep("camera");
+        initializeCamera();
       } catch (err) {
-        console.warn("Microphone permission denied:", err);
-        // Continue without microphone as it's not critical for basic verification
+        console.error("Camera permission denied:", err);
+        setStep("permission-help");
       }
-
-      // Request location access (for security purposes)
-      if ("geolocation" in navigator) {
-        try {
-          await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false,
-              timeout: 5000,
-              maximumAge: 300000,
-            });
-          });
-          setPermissions((prev) => ({ ...prev, location: true }));
-        } catch (err) {
-          console.warn("Location permission denied:", err);
-          // Continue without location as it's not critical for verification
-        }
-      }
-
-      // After permissions are handled, proceed to camera
-      setStep("camera");
-      initializeCamera();
     } catch (error) {
       console.error("Error requesting permissions:", error);
       setErrorMessage(
-        "Failed to request necessary permissions. Please check your browser settings."
+        "Failed to request camera permissions. Please check your browser settings."
       );
       setStep("error");
     }
@@ -116,30 +119,33 @@ export default function FaceNINVerification() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
+
+        // Wait for the video to be ready before showing it
+        videoRef.current.onloadedmetadata = () => {
+          setIsCameraActive(true);
+        };
       }
-      setIsCameraActive(true);
     } catch (error) {
       console.error("Error accessing camera:", error);
-      setErrorMessage(
-        "Camera access denied. Please allow camera permissions to continue."
-      );
-      setStep("error");
+      setStep("permission-help");
     }
   };
 
   // Capture photo
   const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
+    if (videoRef.current && canvasRef.current && isCameraActive) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
+
+      if (!context) return;
 
       // Set canvas dimensions to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
       // Draw current video frame to canvas
-      context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Get image data URL
       const imageData = canvas.toDataURL("image/png");
@@ -213,6 +219,43 @@ export default function FaceNINVerification() {
     };
   }, []);
 
+  // Browser-specific permission instructions
+  const getBrowserInstructions = () => {
+    switch (browser) {
+      case "chrome":
+        return [
+          "Click the camera icon in the address bar",
+          "Select 'Always allow' from the dropdown menu",
+          "Refresh the page and try again",
+        ];
+      case "firefox":
+        return [
+          "Click the camera icon in the address bar",
+          "Select 'Allow' for camera access",
+          "Refresh the page and try again",
+        ];
+      case "safari":
+        return [
+          "Go to Safari > Preferences > Websites",
+          "Select Camera from the left sidebar",
+          "Find this website and set permission to 'Allow'",
+          "Refresh the page and try again",
+        ];
+      case "edge":
+        return [
+          "Click the camera icon in the address bar",
+          "Select 'Always allow' from the dropdown menu",
+          "Refresh the page and try again",
+        ];
+      default:
+        return [
+          "Check your browser settings for camera permissions",
+          "Ensure this website is allowed to access your camera",
+          "Refresh the page and try again",
+        ];
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
@@ -261,8 +304,8 @@ export default function FaceNINVerification() {
               </h3>
               <p className="text-foreground/70 mb-6">
                 To verify your National Identification Number using facial
-                recognition, we need access to your camera and optionally your
-                microphone for enhanced security.
+                recognition, we need access to your camera for identity
+                confirmation.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
@@ -277,24 +320,6 @@ export default function FaceNINVerification() {
                       <p className="text-foreground/60">
                         To capture your facial image for verification against
                         your NIN records
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start">
-                    <Mic className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Microphone (Optional)</span>
-                      <p className="text-foreground/60">
-                        For liveness detection to prevent spoofing
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start">
-                    <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Location (Optional)</span>
-                      <p className="text-foreground/60">
-                        To enhance security by verifying your location
                       </p>
                     </div>
                   </li>
@@ -317,7 +342,7 @@ export default function FaceNINVerification() {
                 className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
                 <Camera className="h-5 w-5 mr-2" />
-                Allow Access & Continue
+                Allow Camera Access
               </button>
 
               <Link
@@ -332,15 +357,15 @@ export default function FaceNINVerification() {
           {step === "permissions" && (
             <div className="text-center py-4">
               <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
-                <Shield className="h-10 w-10 text-primary" />
+                <Settings className="h-10 w-10 text-primary" />
               </div>
 
               <h3 className="text-xl font-bold text-foreground mb-3">
                 Requesting Permissions
               </h3>
               <p className="text-foreground/70 mb-6">
-                Please allow the following permissions when prompted by your
-                browser to continue with NIN verification.
+                Please allow camera access when prompted by your browser to
+                continue with NIN verification.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
@@ -348,18 +373,10 @@ export default function FaceNINVerification() {
                   <Camera className="h-5 w-5 text-primary mr-2" />
                   <span className="font-medium">Camera Access</span>
                 </div>
-                <div className="flex items-center mb-3">
-                  <Mic className="h-5 w-5 text-primary mr-2" />
-                  <span className="font-medium">
-                    Microphone Access (Optional)
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <MapPin className="h-5 w-5 text-primary mr-2" />
-                  <span className="font-medium">
-                    Location Access (Optional)
-                  </span>
-                </div>
+                <p className="text-foreground/70 text-sm mt-1 pl-7">
+                  Look for a permission prompt from your browser. If you
+                  don&apos;t see it, check your address bar for a camera icon.
+                </p>
               </div>
 
               <div className="rounded-lg p-4 bg-amber-50 border border-amber-200 mb-6">
@@ -367,7 +384,7 @@ export default function FaceNINVerification() {
                   <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                   <span>
                     If you don&apos;t see permission prompts, check your
-                    browser&apos;s address bar for camera/microphone icons.
+                    browser&apos;s address bar for camera icons.
                   </span>
                 </p>
               </div>
@@ -375,6 +392,55 @@ export default function FaceNINVerification() {
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div className="bg-primary h-2.5 rounded-full animate-pulse w-3/4"></div>
               </div>
+            </div>
+          )}
+
+          {step === "permission-help" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <HelpCircle className="h-10 w-10 text-primary" />
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Camera Access Required
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                To continue with NIN verification, you need to allow camera
+                access.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
+                <h4 className="font-medium text-primary mb-2 flex items-center">
+                  <Settings className="h-5 w-5 mr-2" />
+                  How to enable camera access in{" "}
+                  {browser.charAt(0).toUpperCase() + browser.slice(1)}
+                </h4>
+                <ul className="text-sm text-foreground/70 space-y-2 mt-2">
+                  {getBrowserInstructions().map((instruction, index) => (
+                    <li key={index} className="flex items-start">
+                      <span className="bg-primary text-white rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      <span>{instruction}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={requestPermissions}
+                className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center mb-3"
+              >
+                <Camera className="h-5 w-5 mr-2" />
+                Try Again
+              </button>
+
+              <button
+                onClick={() => setStep("intro")}
+                className="w-full border border-border text-foreground py-3 px-4 rounded-lg font-medium transition-colors"
+              >
+                Go Back
+              </button>
             </div>
           )}
 

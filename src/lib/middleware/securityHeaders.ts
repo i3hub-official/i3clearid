@@ -10,7 +10,7 @@ export async function withSecurityHeaders(): Promise<NextResponse> {
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()"
+    "camera=(self), microphone=(self), geolocation=(self), payment=(self)"
   );
   res.headers.set(
     "Strict-Transport-Security",
@@ -18,10 +18,16 @@ export async function withSecurityHeaders(): Promise<NextResponse> {
   );
   res.headers.set("X-XSS-Protection", "1; mode=block");
 
-  const directives = Object.entries(cspConfig)
-    .map(([key, value]) => `${key} ${value.join(" ")}`)
+  // Generate CSP header with kebab-case directives
+  const cspDirectives = Object.entries(cspConfig)
+    .map(([key, values]) => {
+      // Convert camelCase to kebab-case for the header
+      const directive = key.replace(/([A-Z])/g, "-$1").toLowerCase();
+      return `${directive} ${values.join(" ")}`;
+    })
     .join("; ");
-  res.headers.set("Content-Security-Policy", directives);
+  res.headers.set("Content-Security-Policy", cspDirectives);
 
   return res;
 }
+
