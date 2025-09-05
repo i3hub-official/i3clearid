@@ -2,37 +2,108 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import {
-  Shield,
-  User,
-  ArrowLeft,
-  CheckCircle,
-  Home,
   Camera,
-  RotateCw,
+  User,
+  Shield,
+  CheckCircle,
   AlertCircle,
-  Video,
-  Circle,
+  RotateCw,
+  Home,
+  ArrowLeft,
+  Mic,
+  MapPin,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 
-export default function FaceVerificationPage() {
+export default function FaceNINVerification() {
+  const [step, setStep] = useState<
+    "intro" | "permissions" | "camera" | "processing" | "success" | "error"
+  >("intro");
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<
-    "idle" | "scanning" | "processing" | "success" | "error"
+    "idle" | "verifying" | "success" | "error"
   >("idle");
-  const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [showTips, setShowTips] = useState(true);
+  const [isCounting, setIsCounting] = useState(false);
+  const [permissions, setPermissions] = useState({
+    camera: false,
+    microphone: false,
+    location: false,
+  });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const progressRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize camera only when verification starts
-  const initCamera = async () => {
+  // Check and request permissions
+  const requestPermissions = async () => {
+    try {
+      setStep("permissions");
+
+      // Request camera access
+      try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setPermissions((prev) => ({ ...prev, camera: true }));
+      } catch (err) {
+        console.error("Camera permission denied:", err);
+        setErrorMessage(
+          "Camera access is required for NIN verification. Please enable camera permissions in your browser settings."
+        );
+        setStep("error");
+        return;
+      }
+
+      // Request microphone access (for liveness detection)
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: true,
+        });
+        micStream.getTracks().forEach((track) => track.stop());
+        setPermissions((prev) => ({ ...prev, microphone: true }));
+      } catch (err) {
+        console.warn("Microphone permission denied:", err);
+        // Continue without microphone as it's not critical for basic verification
+      }
+
+      // Request location access (for security purposes)
+      if ("geolocation" in navigator) {
+        try {
+          await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 5000,
+              maximumAge: 300000,
+            });
+          });
+          setPermissions((prev) => ({ ...prev, location: true }));
+        } catch (err) {
+          console.warn("Location permission denied:", err);
+          // Continue without location as it's not critical for verification
+        }
+      }
+
+      // After permissions are handled, proceed to camera
+      setStep("camera");
+      initializeCamera();
+    } catch (error) {
+      console.error("Error requesting permissions:", error);
+      setErrorMessage(
+        "Failed to request necessary permissions. Please check your browser settings."
+      );
+      setStep("error");
+    }
+  };
+
+  // Initialize camera
+  const initializeCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -43,124 +114,118 @@ export default function FaceVerificationPage() {
       });
 
       if (videoRef.current) {
-        streamRef.current = stream;
         videoRef.current.srcObject = stream;
+        streamRef.current = stream;
       }
+      setIsCameraActive(true);
     } catch (error) {
+      console.error("Error accessing camera:", error);
       setErrorMessage(
-        "Camera access denied. Please allow camera access to continue."
+        "Camera access denied. Please allow camera permissions to continue."
       );
-      setVerificationStatus("error");
+      setStep("error");
     }
   };
 
-  const startVerification = async () => {
-    setVerificationStatus("scanning");
-    setShowTips(true);
+  // Capture photo
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext("2d");
 
-    // Initialize camera when starting verification
-    await initCamera();
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-    // Start countdown
-    let count = 3;
-    setCountdown(count);
+      // Draw current video frame to canvas
+      context?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    countdownRef.current = setInterval(() => {
-      count -= 1;
-      setCountdown(count);
+      // Get image data URL
+      const imageData = canvas.toDataURL("image/png");
+      setCapturedImage(imageData);
 
-      if (count <= 0) {
-        if (countdownRef.current) clearInterval(countdownRef.current);
-        captureFace();
+      // Stop camera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        setIsCameraActive(false);
       }
-    }, 1000);
+
+      // Start countdown before processing
+      setIsCounting(true);
+    }
   };
 
-  const captureFace = () => {
-    setVerificationStatus("processing");
-    setShowTips(false);
+  // Countdown effect
+  useEffect(() => {
+    if (isCounting && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (isCounting && countdown === 0) {
+      setIsCounting(false);
+      setCountdown(3);
+      processVerification();
+    }
+  }, [isCounting, countdown]);
 
-    // Simulate face scanning progress
-    let progress = 0;
-    setScanProgress(progress);
+  // Process verification
+  const processVerification = () => {
+    setStep("processing");
+    setVerificationStatus("verifying");
 
-    if (progressRef.current) clearInterval(progressRef.current);
-
-    progressRef.current = setInterval(() => {
-      progress += 5;
-      setScanProgress(progress);
-
-      if (progress >= 100) {
-        if (progressRef.current) clearInterval(progressRef.current);
-        verifyFace();
-      }
-    }, 150);
-  };
-
-  const verifyFace = () => {
-    setIsLoading(true);
-
-    // Simulate API call to verify face
+    // Simulate API call
     setTimeout(() => {
       const isSuccess = Math.random() > 0.2; // 80% success rate for demo
 
       if (isSuccess) {
         setVerificationStatus("success");
+        setStep("success");
       } else {
         setErrorMessage(
-          "Face verification failed. Please ensure your face is clearly visible and try again."
+          "Face verification failed. Please try again or use another method."
         );
         setVerificationStatus("error");
+        setStep("error");
       }
-      setIsLoading(false);
-    }, 1500);
+    }, 3000);
   };
 
-  const retryVerification = () => {
+  // Retry verification
+  const handleRetry = () => {
+    setStep("camera");
     setVerificationStatus("idle");
     setErrorMessage("");
-    setScanProgress(0);
-    // Don't initialize camera until user clicks Start Verification again
+    setCapturedImage(null);
+    initializeCamera();
   };
 
-  // Clean up camera on unmount or when leaving page
+  // Start verification
+  const startVerification = () => {
+    requestPermissions();
+  };
+
+  // Clean up camera on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
-      if (countdownRef.current) clearTimeout(countdownRef.current);
-      if (progressRef.current) clearInterval(progressRef.current);
     };
   }, []);
 
-  const getStatusMessage = () => {
-    switch (verificationStatus) {
-      case "scanning":
-        return "Get ready for scanning...";
-      case "processing":
-        return "Scanning your face...";
-      case "success":
-        return "Verification successful!";
-      case "error":
-        return "Verification failed";
-      default:
-        return "Face Verification";
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 py-8">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
+        {/* Header */}
         <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8">
           <div className="flex justify-between items-start mb-8">
             <div>
               <div className="flex items-center mb-2">
                 <Shield className="w-8 h-8 text-primary mr-2" />
-                <h1 className="text-2xl font-bold">SecureID</h1>
+                <h1 className="text-2xl font-bold">NationalID</h1>
               </div>
               <p className="text-sm text-foreground/70">
-                Bank-verified identity authentication
+                Government-verified identity authentication
               </p>
             </div>
 
@@ -174,221 +239,340 @@ export default function FaceVerificationPage() {
 
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
-              <User className="w-4 h-4 text-primary mr-2" />
-              <h3 className="font-medium text-sm">Facial Recognition</h3>
+              <FileText className="w-4 h-4 text-primary mr-2" />
+              <h3 className="font-medium text-sm">NIN Facial Verification</h3>
             </div>
             <p className="text-foreground/70 text-xs">
-              Fastest way to verify your identity using facial recognition
+              Secure NIN verification using facial recognition technology
             </p>
           </div>
         </div>
 
+        {/* Content */}
         <div className="p-8">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground">
-              {getStatusMessage()}
-            </h2>
-            <p className="text-foreground/70 mt-2">
-              {verificationStatus === "idle" &&
-                "Verify your identity instantly using facial recognition"}
-              {verificationStatus === "scanning" &&
-                `Scanning will begin in ${countdown}...`}
-              {verificationStatus === "processing" &&
-                "Please keep still while we verify your identity"}
-              {verificationStatus === "success" &&
-                "Your identity has been successfully verified!"}
-              {verificationStatus === "error" &&
-                "We couldn't verify your identity. Please try again."}
-            </p>
-          </div>
-
-          <div className="relative bg-black rounded-xl overflow-hidden mb-6">
-            {/* Camera feed - only show when scanning or processing */}
-            {(verificationStatus === "scanning" ||
-              verificationStatus === "processing") && (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-64 object-cover"
-              />
-            )}
-
-            {/* Placeholder when camera is not active */}
-            {verificationStatus === "idle" && (
-              <div className="w-full h-64 bg-border flex items-center justify-center">
-                <div className="text-center">
-                  <Camera className="w-12 h-12 text-foreground/50 mx-auto mb-2" />
-                  <p className="text-foreground/70 text-sm">
-                    Camera will activate when verification starts
-                  </p>
-                </div>
+          {step === "intro" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <Camera className="h-10 w-10 text-primary" />
               </div>
-            )}
 
-            {/* Scanning overlay */}
-            {(verificationStatus === "scanning" ||
-              verificationStatus === "processing") && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="relative w-48 h-48">
-                  {/* Scanning animation */}
-                  <div className="absolute inset-0 border-4 border-primary/30 rounded-full animate-ping"></div>
-                  <div
-                    className="absolute inset-0 border-4 border-primary/50 rounded-full animate-ping"
-                    style={{ animationDelay: "0.5s" }}
-                  ></div>
-
-                  {/* Face outline */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-40 h-48 border-4 border-primary rounded-xl"></div>
-                  </div>
-
-                  {/* Countdown during scanning phase */}
-                  {verificationStatus === "scanning" && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-4xl font-bold text-white bg-primary/80 rounded-full w-16 h-16 flex items-center justify-center">
-                        {countdown}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Progress during processing phase */}
-                  {verificationStatus === "processing" && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-white text-center">
-                        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                        <p className="text-sm">{scanProgress}%</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Success overlay */}
-            {verificationStatus === "success" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-primary/5">
-                <div className="text-center p-6">
-                  <div className="bg-primary/10 p-4 rounded-full inline-block mb-4">
-                    <CheckCircle className="w-12 h-12 text-primary" />
-                  </div>
-                  <p className="text-white font-medium">
-                    Verification Complete
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Error overlay */}
-            {verificationStatus === "error" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-red-500/5">
-                <div className="text-center p-6">
-                  <div className="bg-red-500/10 p-4 rounded-full inline-block mb-4">
-                    <AlertCircle className="w-12 h-12 text-red-500" />
-                  </div>
-                  <p className="text-white font-medium">Verification Failed</p>
-                </div>
-              </div>
-            )}
-
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-
-          {showTips && verificationStatus === "idle" && (
-            <div className="bg-primary/5 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-sm mb-2 flex items-center">
-                <Camera className="w-4 h-4 mr-2" /> Tips for best results
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                NIN Face Verification
               </h3>
-              <ul className="text-xs text-foreground/70 space-y-1">
-                <li className="flex items-start">
-                  <Circle className="w-2 h-2 mt-1 mr-2 flex-shrink-0" />
-                  <span>Ensure good lighting on your face</span>
-                </li>
-                <li className="flex items-start">
-                  <Circle className="w-2 h-2 mt-1 mr-2 flex-shrink-0" />
-                  <span>Remove sunglasses or hats</span>
-                </li>
-                <li className="flex items-start">
-                  <Circle className="w-2 h-2 mt-1 mr-2 flex-shrink-0" />
-                  <span>Look directly at the camera</span>
-                </li>
-                <li className="flex items-start">
-                  <Circle className="w-2 h-2 mt-1 mr-2 flex-shrink-0" />
-                  <span>Keep a neutral expression</span>
-                </li>
-              </ul>
+              <p className="text-foreground/70 mb-6">
+                To verify your National Identification Number using facial
+                recognition, we need access to your camera and optionally your
+                microphone for enhanced security.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
+                <h4 className="font-medium text-primary mb-2">
+                  Required Access:
+                </h4>
+                <ul className="text-sm text-foreground/80 space-y-3">
+                  <li className="flex items-start">
+                    <Camera className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Camera</span>
+                      <p className="text-foreground/60">
+                        To capture your facial image for verification against
+                        your NIN records
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
+                    <Mic className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Microphone (Optional)</span>
+                      <p className="text-foreground/60">
+                        For liveness detection to prevent spoofing
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
+                    <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Location (Optional)</span>
+                      <p className="text-foreground/60">
+                        To enhance security by verifying your location
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="bg-blue-50 rounded-lg p-4 text-left mb-6 border border-blue-100">
+                <h4 className="font-medium text-blue-700 mb-2 flex items-center">
+                  <Shield className="h-4 w-4 mr-1" /> Security Assurance
+                </h4>
+                <p className="text-blue-600 text-sm">
+                  Your biometric data is encrypted, processed securely by the
+                  National Identity Management Commission, and never stored on
+                  external servers.
+                </p>
+              </div>
+
+              <button
+                onClick={startVerification}
+                className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+              >
+                <Camera className="h-5 w-5 mr-2" />
+                Allow Access & Continue
+              </button>
+
+              <Link
+                href="/verify/nin"
+                className="inline-block mt-4 text-primary hover:text-primary/80 text-sm font-medium"
+              >
+                Use traditional NIN verification instead
+              </Link>
             </div>
           )}
 
-          {errorMessage && (
-            <div className="bg-red-500/5 rounded-lg p-4 border border-red-500/10 mb-6">
-              <div className="flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                <p className="text-red-500 text-sm">{errorMessage}</p>
+          {step === "permissions" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <Shield className="h-10 w-10 text-primary" />
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Requesting Permissions
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Please allow the following permissions when prompted by your
+                browser to continue with NIN verification.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
+                <div className="flex items-center mb-3">
+                  <Camera className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">Camera Access</span>
+                </div>
+                <div className="flex items-center mb-3">
+                  <Mic className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Microphone Access (Optional)
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Location Access (Optional)
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-4 bg-amber-50 border border-amber-200 mb-6">
+                <p className="text-amber-700 text-sm flex items-start">
+                  <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                  <span>
+                    If you don&apos;t see permission prompts, check your
+                    browser&apos;s address bar for camera/microphone icons.
+                  </span>
+                </p>
+              </div>
+
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-primary h-2.5 rounded-full animate-pulse w-3/4"></div>
               </div>
             </div>
           )}
 
-          {verificationStatus === "idle" && (
-            <button
-              onClick={startVerification}
-              className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center"
-            >
-              <Video className="w-5 h-5 mr-2" /> Start Verification
-            </button>
+          {step === "camera" && (
+            <div className="text-center py-2">
+              <h3 className="text-xl font-bold text-foreground mb-4">
+                NIN Face Verification
+              </h3>
+              <p className="text-foreground/70 mb-4">
+                Position your face in the center of the frame for verification
+              </p>
+
+              <div className="relative bg-border rounded-lg overflow-hidden mb-4 aspect-[3/4]">
+                {isCameraActive ? (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-foreground/50">
+                      Initializing camera...
+                    </div>
+                  </div>
+                )}
+
+                {/* Face guide overlay */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="border-2 border-white border-dashed rounded-full h-48 w-48 flex items-center justify-center">
+                    <div className="bg-white/20 rounded-full h-40 w-40"></div>
+                  </div>
+                </div>
+
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+
+              <div className="bg-primary/5 rounded-lg p-3 mb-4">
+                <p className="text-xs text-foreground/70">
+                  <strong>Verification in progress:</strong> This image will be
+                  compared to your NIN records for identity verification.
+                </p>
+              </div>
+
+              <button
+                onClick={capturePhoto}
+                disabled={!isCameraActive}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+              >
+                {isCounting ? `Verifying in ${countdown}...` : "Capture Image"}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (streamRef.current) {
+                    streamRef.current
+                      .getTracks()
+                      .forEach((track) => track.stop());
+                  }
+                  setStep("intro");
+                }}
+                className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
+              >
+                Cancel Verification
+              </button>
+            </div>
           )}
 
-          {verificationStatus === "success" && (
-            <div className="space-y-4">
-              <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
-                <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-primary mr-2" />
-                  <h3 className="font-medium">Verification Complete</h3>
+          {step === "processing" && (
+            <div className="text-center py-8">
+              {verificationStatus === "verifying" ? (
+                <>
+                  <div className="relative mb-6">
+                    <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                      <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <User className="h-8 w-8 text-primary" />
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-foreground mb-2">
+                    Verifying Your NIN
+                  </h3>
+                  <p className="text-foreground/70">
+                    Comparing your facial data with the National Identity
+                    Database...
+                  </p>
+
+                  <div className="mt-6 bg-border rounded-full h-2">
+                    <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+
+          {step === "success" && (
+            <div className="text-center py-6">
+              <div className="bg-green-100 rounded-full p-4 inline-flex mb-6">
+                <CheckCircle className="h-12 w-12 text-green-600" />
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-2">
+                NIN Verification Successful!
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Your National Identification Number has been successfully
+                verified using facial recognition.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-foreground mb-2">
+                  Verification Details
+                </h4>
+                <div className="text-sm text-foreground/70 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Method:</span>
+                    <span className="font-medium">Facial Recognition</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Verification:</span>
+                    <span className="font-medium">NIN Match Confirmed</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Time:</span>
+                    <span className="font-medium">Less than 30 seconds</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status:</span>
+                    <span className="font-medium text-green-600">Verified</span>
+                  </div>
                 </div>
-                <p className="text-foreground/70 text-sm mt-1">
-                  Your identity has been successfully verified.
-                </p>
               </div>
 
               <Link
                 href="/dashboard"
-                className="w-full bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition flex items-center justify-center"
+                className="block w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors"
               >
                 Continue to Dashboard
               </Link>
             </div>
           )}
 
-          {(verificationStatus === "error" ||
-            verificationStatus === "success") && (
-            <button
-              onClick={retryVerification}
-              className="w-full border border-border px-6 py-3 rounded-lg font-medium hover:bg-primary/5 transition flex items-center justify-center mt-4"
-            >
-              <RotateCw className="w-5 h-5 mr-2" /> Verify Again
-            </button>
+          {step === "error" && (
+            <div className="text-center py-6">
+              <div className="bg-red-100 rounded-full p-4 inline-flex mb-6">
+                <AlertCircle className="h-12 w-12 text-red-600" />
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-2">
+                NIN Verification Failed
+              </h3>
+              <p className="text-foreground/70 mb-4">{errorMessage}</p>
+
+              {capturedImage && (
+                <div className="mb-6">
+                  <p className="text-sm text-foreground/50 mb-2">
+                    Captured Image:
+                  </p>
+                  <img
+                    src={capturedImage}
+                    alt="Captured face"
+                    className="mx-auto rounded-lg border border-border max-h-40"
+                  />
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleRetry}
+                  className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                >
+                  <RotateCw className="h-5 w-5 mr-2" />
+                  Try Again
+                </button>
+
+                <Link
+                  href="/nin-verification"
+                  className="flex-1 border border-border hover:bg-primary/5 text-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                >
+                  <ArrowLeft className="h-5 w-5 mr-2" />
+                  Other Method
+                </Link>
+              </div>
+            </div>
           )}
+        </div>
 
-          {/* Back to verification options link */}
-          <div className="flex justify-center mt-6">
-            <Link
-              href="/verify/verification-options"
-              className="text-primary hover:underline text-sm flex items-center"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" /> Other Verification Methods
-            </Link>
-          </div>
-
-          {/* Desktop back to home link */}
-          <div className="hidden md:flex justify-center mt-6">
-            <Link
-              href="/"
-              className="text-primary hover:underline text-sm flex items-center"
-            >
-              <Home className="w-4 h-4 mr-1" /> Back to Home
-            </Link>
-          </div>
+        {/* Footer */}
+        <div className="bg-primary/5 p-4 text-center border-t border-border">
+          <p className="text-xs text-foreground/70">
+            Your facial data is encrypted and processed securely for NIN
+            verification purposes only. We comply with the National Identity
+            Management Commission&apos;s data protection guidelines.
+          </p>
         </div>
       </div>
     </div>

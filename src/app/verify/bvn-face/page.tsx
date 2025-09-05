@@ -10,12 +10,15 @@ import {
   RotateCw,
   Home,
   ArrowLeft,
+  Mic,
+  MapPin,
+  Video,
 } from "lucide-react";
 import Link from "next/link";
 
 export default function FaceBVNVerification() {
   const [step, setStep] = useState<
-    "intro" | "camera" | "processing" | "success" | "error"
+    "intro" | "permissions" | "camera" | "processing" | "success" | "error"
   >("intro");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -25,10 +28,79 @@ export default function FaceBVNVerification() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [isCounting, setIsCounting] = useState(false);
+  const [permissions, setPermissions] = useState({
+    camera: false,
+    microphone: false,
+    location: false,
+  });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Check and request permissions
+  const requestPermissions = async () => {
+    try {
+      setStep("permissions");
+
+      // Request camera access
+      try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setPermissions((prev) => ({ ...prev, camera: true }));
+      } catch (err) {
+        console.error("Camera permission denied:", err);
+        setErrorMessage(
+          "Camera access is required for facial verification. Please enable camera permissions in your browser settings."
+        );
+        setStep("error");
+        return;
+      }
+
+      // Request microphone access (for liveness detection)
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: true,
+        });
+        micStream.getTracks().forEach((track) => track.stop());
+        setPermissions((prev) => ({ ...prev, microphone: true }));
+      } catch (err) {
+        console.warn("Microphone permission denied:", err);
+        // Continue without microphone as it's not critical for basic verification
+      }
+
+      // Request location access (for security purposes)
+      if ("geolocation" in navigator) {
+        try {
+          await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 5000,
+              maximumAge: 300000,
+            });
+          });
+          setPermissions((prev) => ({ ...prev, location: true }));
+        } catch (err) {
+          console.warn("Location permission denied:", err);
+          // Continue without location as it's not critical for verification
+        }
+      }
+
+      // After permissions are handled, proceed to camera
+      setStep("camera");
+      initializeCamera();
+    } catch (error) {
+      console.error("Error requesting permissions:", error);
+      setErrorMessage(
+        "Failed to request necessary permissions. Please check your browser settings."
+      );
+      setStep("error");
+    }
+  };
 
   // Initialize camera
   const initializeCamera = async () => {
@@ -129,8 +201,7 @@ export default function FaceBVNVerification() {
 
   // Start verification
   const startVerification = () => {
-    setStep("camera");
-    initializeCamera();
+    requestPermissions();
   };
 
   // Clean up camera on unmount
@@ -169,10 +240,10 @@ export default function FaceBVNVerification() {
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
               <User className="w-4 h-4 text-primary mr-2" />
-              <h3 className="font-medium text-sm">Facial Recognition</h3>
+              <h3 className="font-medium text-sm">BVN Facial Verification</h3>
             </div>
             <p className="text-foreground/70 text-xs">
-              Fastest way to verify your BVN using facial recognition
+              Secure BVN verification using facial recognition technology
             </p>
           </div>
         </div>
@@ -186,36 +257,59 @@ export default function FaceBVNVerification() {
               </div>
 
               <h3 className="text-xl font-bold text-foreground mb-3">
-                Verify with Facial Recognition
+                BVN Face Verification
               </h3>
               <p className="text-foreground/70 mb-6">
-                Using facial recognition is the fastest way to verify your BVN.
-                This process takes less than 30 seconds and is completely
-                secure.
+                To verify your BVN using facial recognition, we need access to
+                your camera and optionally your microphone for enhanced
+                security.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
-                <h4 className="font-medium text-primary mb-2">How it works:</h4>
-                <ul className="text-sm text-foreground/80 space-y-1">
+                <h4 className="font-medium text-primary mb-2">
+                  Required Access:
+                </h4>
+                <ul className="text-sm text-foreground/80 space-y-3">
                   <li className="flex items-start">
-                    <span className="bg-primary text-white rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2">
-                      1
-                    </span>
-                    <span>Allow camera access when prompted</span>
+                    <Camera className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Camera</span>
+                      <p className="text-foreground/60">
+                        To capture your facial image for verification against
+                        your BVN records
+                      </p>
+                    </div>
                   </li>
                   <li className="flex items-start">
-                    <span className="bg-primary text-white rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2">
-                      2
-                    </span>
-                    <span>Position your face in the frame</span>
+                    <Mic className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Microphone (Optional)</span>
+                      <p className="text-foreground/60">
+                        For liveness detection to prevent spoofing
+                      </p>
+                    </div>
                   </li>
                   <li className="flex items-start">
-                    <span className="bg-primary text-white rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2">
-                      3
-                    </span>
-                    <span>We&apos;ll verify your identity automatically</span>
+                    <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">Location (Optional)</span>
+                      <p className="text-foreground/60">
+                        To enhance security by verifying your location
+                      </p>
+                    </div>
                   </li>
                 </ul>
+              </div>
+
+              <div className="bg-blue-50 rounded-lg p-4 text-left mb-6 border border-blue-100">
+                <h4 className="font-medium text-blue-700 mb-2 flex items-center">
+                  <Shield className="h-4 w-4 mr-1" /> Security Assurance
+                </h4>
+                <p className="text-blue-600 text-sm">
+                  Your biometric data is encrypted, processed securely, and
+                  never stored. This verification is conducted in partnership
+                  with your bank.
+                </p>
               </div>
 
               <button
@@ -223,11 +317,11 @@ export default function FaceBVNVerification() {
                 className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
                 <Camera className="h-5 w-5 mr-2" />
-                Start Verification
+                Allow Access & Continue
               </button>
 
               <Link
-                href="/bvn-verification"
+                href="/verify/bvn"
                 className="inline-block mt-4 text-primary hover:text-primary/80 text-sm font-medium"
               >
                 Use traditional verification instead
@@ -235,13 +329,62 @@ export default function FaceBVNVerification() {
             </div>
           )}
 
+          {step === "permissions" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <Shield className="h-10 w-10 text-primary" />
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Requesting Permissions
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Please allow the following permissions when prompted by your
+                browser to continue with BVN verification.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
+                <div className="flex items-center mb-3">
+                  <Camera className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">Camera Access</span>
+                </div>
+                <div className="flex items-center mb-3">
+                  <Mic className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Microphone Access (Optional)
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Location Access (Optional)
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-4 bg-amber-50 border border-amber-200 mb-6">
+                <p className="text-amber-700 text-sm flex items-start">
+                  <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                  <span>
+                    If you don&apos;t see permission prompts, check your browser&apos;s
+                    address bar for camera/microphone icons.
+                  </span>
+                </p>
+              </div>
+
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-primary h-2.5 rounded-full animate-pulse w-3/4"></div>
+              </div>
+            </div>
+          )}
+
           {step === "camera" && (
             <div className="text-center py-2">
               <h3 className="text-xl font-bold text-foreground mb-4">
-                Position Your Face
+                BVN Face Verification
               </h3>
               <p className="text-foreground/70 mb-4">
-                Make sure your face is clearly visible within the frame
+                Position your face in the center of the frame for verification
               </p>
 
               <div className="relative bg-border rounded-lg overflow-hidden mb-4 aspect-[3/4]">
@@ -271,12 +414,19 @@ export default function FaceBVNVerification() {
                 <canvas ref={canvasRef} className="hidden" />
               </div>
 
+              <div className="bg-primary/5 rounded-lg p-3 mb-4">
+                <p className="text-xs text-foreground/70">
+                  <strong>Verification in progress:</strong> This image will be
+                  compared to your BVN records for identity verification.
+                </p>
+              </div>
+
               <button
                 onClick={capturePhoto}
                 disabled={!isCameraActive}
                 className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
               >
-                Capture Photo
+                {isCounting ? `Verifying in ${countdown}...` : "Capture Image"}
               </button>
 
               <button
@@ -290,7 +440,7 @@ export default function FaceBVNVerification() {
                 }}
                 className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
               >
-                Cancel
+                Cancel Verification
               </button>
             </div>
           )}
@@ -309,10 +459,10 @@ export default function FaceBVNVerification() {
                   </div>
 
                   <h3 className="text-xl font-bold text-foreground mb-2">
-                    Verifying Your Identity
+                    Verifying Your BVN
                   </h3>
                   <p className="text-foreground/70">
-                    Please wait while we process your facial data...
+                    Comparing your facial data with your bank&apos;s BVN records...
                   </p>
 
                   <div className="mt-6 bg-border rounded-full h-2">
@@ -330,10 +480,11 @@ export default function FaceBVNVerification() {
               </div>
 
               <h3 className="text-xl font-bold text-foreground mb-2">
-                Verification Successful!
+                BVN Verification Successful!
               </h3>
               <p className="text-foreground/70 mb-6">
-                Your BVN has been verified using facial recognition.
+                Your Bank Verification Number has been successfully verified
+                using facial recognition.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 mb-6">
@@ -344,6 +495,10 @@ export default function FaceBVNVerification() {
                   <div className="flex justify-between">
                     <span>Method:</span>
                     <span className="font-medium">Facial Recognition</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Verification:</span>
+                    <span className="font-medium">BVN Match Confirmed</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Time:</span>
@@ -372,7 +527,7 @@ export default function FaceBVNVerification() {
               </div>
 
               <h3 className="text-xl font-bold text-foreground mb-2">
-                Verification Failed
+                BVN Verification Failed
               </h3>
               <p className="text-foreground/70 mb-4">{errorMessage}</p>
 
@@ -413,8 +568,9 @@ export default function FaceBVNVerification() {
         {/* Footer */}
         <div className="bg-primary/5 p-4 text-center border-t border-border">
           <p className="text-xs text-foreground/70">
-            Your facial data is encrypted and processed securely. We do not
-            store your biometric information.
+            Your facial data is encrypted and processed securely for BVN
+            verification purposes only. We do not store your biometric
+            information.
           </p>
         </div>
       </div>

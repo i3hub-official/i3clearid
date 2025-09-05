@@ -1,23 +1,21 @@
-// dev-server.js
 import { createServer } from 'https';
+import { createServer as createHttpServer } from 'http';
 import next from 'next';
 import fs from 'fs';
 import os from 'os';
 import dotenv from 'dotenv';
+import qrcode from 'qrcode-terminal';
 
-// Load environment variables from .env.local or .env
+// Load environment variables
 dotenv.config({ path: '.env.local' });
 
-// Get cert paths from environment
+const dev = process.env.NODE_ENV !== 'production';
+const httpPort = 3000;
+const httpsPort = 3001;
 const certPath = process.env.SSL_CERTIFICATE;
 const keyPath = process.env.SSL_KEY;
 
-if (!certPath || !keyPath) {
-    console.error('❌ SSL_CERTIFICATE or SSL_KEY not set in environment variables.');
-    process.exit(1);
-}
-
-const app = next({ dev: true });
+const app = next({ dev });
 const handle = app.getRequestHandler();
 
 // Get all LAN IPv4 addresses
@@ -28,15 +26,36 @@ const lanIps = Object.values(interfaces)
     .map(i => i.address);
 
 app.prepare().then(() => {
-    createServer({
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath),
-    }, (req, res) => {
+    // Start HTTP server
+    createHttpServer((req, res) => {
         handle(req, res);
-    }).listen(3000, '0.0.0.0', () => {
-        console.log('> ✅ HTTPS server ready on https://localhost:3000');
+    }).listen(httpPort, '0.0.0.0', () => {
+        console.log(`> 🌐 HTTP server ready on http://localhost:${httpPort}`);
         lanIps.forEach(ip => {
-            console.log(`> 🌐 Accessible via LAN: https://${ip}:3000`);
+            const url = `http://${ip}:${httpPort}`;
+            console.log(`> 📱 Accessible via LAN: ${url}`);
+            qrcode.generate(url, { small: true });
         });
     });
+
+    // Start HTTPS server if certs are valid
+    if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+        const httpsOptions = {
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath),
+        };
+
+        createServer(httpsOptions, (req, res) => {
+            handle(req, res);
+        }).listen(httpsPort, '0.0.0.0', () => {
+            console.log(`> ✅ HTTPS server ready on https://localhost:${httpsPort}`);
+            lanIps.forEach(ip => {
+                const url = `https://${ip}:${httpsPort}`;
+                console.log(`> 🔐 Accessible via LAN: ${url}`);
+                qrcode.generate(url, { small: true });
+            });
+        });
+    } else {
+        console.warn('⚠️ SSL certs missing or invalid. HTTPS server not started.');
+    }
 });
