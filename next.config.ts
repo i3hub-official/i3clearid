@@ -1,9 +1,13 @@
-// next.config.ts
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  compress: true,
+  productionBrowserSourceMaps: false,
+
+  // Enable Turbopack in dev
   turbopack: isDev
     ? {
         resolveAlias: {
@@ -13,15 +17,12 @@ const nextConfig: NextConfig = {
       }
     : undefined,
 
-  reactStrictMode: true,
-  compress: true,
-  productionBrowserSourceMaps: false,
-
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
     },
   },
+
   async headers() {
     return [
       {
@@ -60,23 +61,20 @@ const nextConfig: NextConfig = {
 
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-        pathname: "/**", // allow all paths under this host
-      },
-      {
-        protocol: "https",
-        hostname: "ui-avatars.com",
-        pathname: "/**", // allow all paths under this host
-      },
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
+      { protocol: "https", hostname: "ui-avatars.com", pathname: "/**" },
     ],
     disableStaticImages: false,
-    minimumCacheTTL: 60, // cache images for 60 seconds
+    minimumCacheTTL: 60,
   },
+
   webpack: (config) => {
     if (!isDev) {
-      config.resolve.fallback = { fs: false, net: false, tls: false };
+      config.resolve.fallback = {
+        fs: false,
+        net: false,
+        tls: false,
+      };
     }
     return config;
   },
