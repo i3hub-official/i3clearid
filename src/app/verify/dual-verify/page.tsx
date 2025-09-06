@@ -1,27 +1,5 @@
 "use client";
 
-// Add FaceDetector type for browsers that support it
-declare global {
-  interface Window {
-    FaceDetector?: typeof FaceDetector;
-  }
-  // Minimal FaceDetector type definition
-  // Remove if you have a polyfill or @types/face-api.js
-  // This is for TypeScript only, not runtime
-  var FaceDetector: {
-    new (options?: { fastMode?: boolean; maxDetectedFaces?: number }): {
-      detect: (
-        image: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-      ) => Promise<
-        Array<{
-          boundingBox: DOMRectReadOnly;
-          landmarks?: Array<{ x: number; y: number }>;
-        }>
-      >;
-    };
-  };
-}
-
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -36,11 +14,15 @@ import {
   ArrowLeft,
   Mic,
   MapPin,
+  CreditCard,
+  Fingerprint,
 } from "lucide-react";
 
-export default function FaceNINVerification() {
+export default function FaceBVNVerification() {
   type Step =
     | "intro"
+    | "bvn-input"
+    | "nin-input"
     | "permissions"
     | "camera"
     | "processing"
@@ -64,13 +46,65 @@ export default function FaceNINVerification() {
   const [showPreview, setShowPreview] = useState(false);
   const [faceHint, setFaceHint] = useState<string | null>(null);
   const [isHoldingSteady, setIsHoldingSteady] = useState(false);
+  const [bvn, setBvn] = useState("");
+  const [nin, setNin] = useState("");
+  const [bvnError, setBvnError] = useState("");
+  const [ninError, setNinError] = useState("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const autoCaptureTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const holdStartRef = useRef<number | null>(null);
+  const [ovalColor, setOvalColor] = useState<"yellow" | "red" | "green">(
+    "yellow"
+  );
+
+  // Validate BVN format (11 digits)
+  const validateBvn = (value: string): boolean => {
+    const bvnRegex = /^\d{11}$/;
+    return bvnRegex.test(value);
+  };
+
+  // Validate NIN format (11 digits)
+  const validateNin = (value: string): boolean => {
+    const ninRegex = /^\d{11}$/;
+    return ninRegex.test(value);
+  };
+
+  // Handle BVN input
+  const handleBvnSubmit = () => {
+    if (validateBvn(bvn)) {
+      setBvnError("");
+      setStep("nin-input");
+    } else {
+      setBvnError("BVN must be 11 digits");
+    }
+  };
+
+  // Handle NIN input and matching logic
+  const handleNinSubmit = () => {
+    if (!validateNin(nin)) {
+      setNinError("NIN must be 11 digits");
+      return;
+    }
+
+    setNinError("");
+
+    // In a real application, this would be an API call to verify the BVN-NIN match
+    // For demo purposes, we'll simulate a successful match if the last 4 digits are the same
+    const bvnLastFour = bvn.slice(-4);
+    const ninLastFour = nin.slice(-4);
+
+    if (bvnLastFour === ninLastFour) {
+      setStep("permissions");
+    } else {
+      setErrorMessage("BVN and NIN do not match. Please check your details.");
+      setStep("error");
+    }
+  };
 
   // ------- Permission flow
   const requestPermissions = async () => {
@@ -86,8 +120,9 @@ export default function FaceNINVerification() {
         s.getTracks().forEach((t) => t.stop());
         setPermissions((p) => ({ ...p, camera: true }));
       } catch (err) {
+        console.error("Camera permission denied:", err);
         setErrorMessage(
-          "Camera access is required for facial verification. Please enable camera permissions."
+          "Camera access is required for facial verification. Please enable camera permissions in your browser settings."
         );
         setStep("error");
         return;
@@ -101,8 +136,8 @@ export default function FaceNINVerification() {
         });
         s.getTracks().forEach((t) => t.stop());
         setPermissions((p) => ({ ...p, microphone: true }));
-      } catch {
-        console.warn("Microphone permission denied");
+      } catch (err) {
+        console.warn("Microphone permission denied:", err);
       }
 
       // LOCATION (optional)
@@ -110,18 +145,21 @@ export default function FaceNINVerification() {
         try {
           await new Promise((resolve, reject) =>
             navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
               timeout: 5000,
+              maximumAge: 300000,
             })
           );
           setPermissions((p) => ({ ...p, location: true }));
-        } catch {
-          console.warn("Location permission denied");
+        } catch (err) {
+          console.warn("Location permission denied:", err);
         }
       }
 
       setStep("camera");
       initializeCamera();
     } catch (error) {
+      console.error("Error requesting permissions:", error);
       setErrorMessage(
         "Failed to request necessary permissions. Please check your browser settings."
       );
@@ -132,6 +170,7 @@ export default function FaceNINVerification() {
   // ------- Camera setup / teardown
   const initializeCamera = async () => {
     try {
+      // Stop any existing stream first
       stopCameraStream();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -144,7 +183,9 @@ export default function FaceNINVerification() {
       });
 
       if (!videoRef.current) return;
+
       videoRef.current.srcObject = stream;
+      // Helpful attributes for mobile autoplay policies
       videoRef.current.setAttribute("playsinline", "true");
       videoRef.current.muted = true;
 
@@ -156,12 +197,14 @@ export default function FaceNINVerification() {
             setIsCameraActive(true);
             startDetectionLoop();
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error("Error playing video:", err);
             setErrorMessage("Failed to start camera. Please try again.");
             setStep("error");
           });
       };
-    } catch {
+    } catch (error) {
+      console.error("Error accessing camera:", error);
       setErrorMessage(
         "Camera access denied. Please allow camera permissions to continue."
       );
@@ -180,6 +223,7 @@ export default function FaceNINVerification() {
   // ------- Detection & Auto-capture
   const startDetectionLoop = () => {
     cancelDetectionLoop();
+
     const FaceDetectorCtor: typeof FaceDetector | undefined = (
       window as typeof window
     ).FaceDetector;
@@ -188,8 +232,8 @@ export default function FaceNINVerification() {
       ? new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 1 })
       : null;
 
-    const HOLD_MS = 1200;
-    const MIN_BOX_RATIO = 0.22;
+    const HOLD_MS = 1200; // require steady face for this long before auto-capture
+    const MIN_BOX_RATIO = 0.22; // min face box height relative to video height
 
     const loop = async () => {
       if (!videoRef.current || videoRef.current.readyState < 2) {
@@ -200,6 +244,7 @@ export default function FaceNINVerification() {
       const video = videoRef.current;
       const vw = video.videoWidth;
       const vh = video.videoHeight;
+
       let faceOk = false;
 
       if (hasFaceDetector && detector) {
@@ -266,13 +311,16 @@ export default function FaceNINVerification() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (video.readyState < 2) return;
+    if (video.readyState < 2) return; // HAVE_CURRENT_DATA
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // match canvas to video
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // Mirror drawing (to match user-facing preview)
     ctx.save();
     ctx.scale(-1, 1);
     ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
@@ -282,8 +330,11 @@ export default function FaceNINVerification() {
     setCapturedImage(imageData);
     setShowPreview(true);
 
+    // Stop camera and detection to freeze the frame
     cancelDetectionLoop();
     stopCameraStream();
+
+    // Begin countdown to processing
     setIsCounting(true);
   };
 
@@ -305,6 +356,7 @@ export default function FaceNINVerification() {
     setStep("processing");
     setVerificationStatus("verifying");
 
+    // Simulate API call
     processingTimeoutRef.current = setTimeout(() => {
       const isSuccess = Math.random() > 0.2;
       if (isSuccess) {
@@ -333,21 +385,29 @@ export default function FaceNINVerification() {
   };
 
   const startVerification = () => {
-    requestPermissions();
+    setStep("bvn-input");
   };
 
   const cleanupEverything = () => {
+    // stop timers/timeouts
+    if (autoCaptureTimeoutRef.current) {
+      clearTimeout(autoCaptureTimeoutRef.current);
+      autoCaptureTimeoutRef.current = null;
+    }
     if (processingTimeoutRef.current) {
       clearTimeout(processingTimeoutRef.current);
       processingTimeoutRef.current = null;
     }
 
+    // stop countdown
     setIsCounting(false);
     setCountdown(3);
 
+    // stop camera + detection
     cancelDetectionLoop();
     stopCameraStream();
 
+    // reset state
     setCapturedImage(null);
     setShowPreview(false);
     setVerificationStatus("idle");
@@ -355,16 +415,24 @@ export default function FaceNINVerification() {
     holdStartRef.current = null;
     setFaceHint(null);
     setIsHoldingSteady(false);
+    setBvn("");
+    setNin("");
+    setBvnError("");
+    setNinError("");
 
+    // return to intro
     setStep("intro");
   };
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanupEverything();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ------- UI helpers
   const controlsDisabled =
     step === "processing" || verificationStatus === "verifying" || isCounting;
 
@@ -380,7 +448,7 @@ export default function FaceNINVerification() {
                 <h1 className="text-2xl font-bold">SecureID</h1>
               </div>
               <p className="text-sm text-foreground/70">
-                National ID facial authentication
+                Bank-verified identity authentication
               </p>
             </div>
             <Link
@@ -394,10 +462,12 @@ export default function FaceNINVerification() {
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
               <User className="w-4 h-4 text-primary mr-2" />
-              <h3 className="font-medium text-sm">NIN Facial Verification</h3>
+              <h3 className="font-medium text-sm">
+                BVN-NIN Facial Verification
+              </h3>
             </div>
             <p className="text-foreground/70 text-xs">
-              Secure verification using your National Identity Number
+              Secure BVN to NIN verification using facial recognition technology
             </p>
           </div>
         </div>
@@ -407,15 +477,15 @@ export default function FaceNINVerification() {
           {step === "intro" && (
             <div className="text-center py-4">
               <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
-                <Camera className="h-10 w-10 text-primary" />
+                <Fingerprint className="h-10 w-10 text-primary" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3">
-                NIN Face Verification
+                BVN to NIN Verification
               </h3>
               <p className="text-foreground/70 mb-6">
-                To verify your NIN using facial recognition, we need access to
-                your camera and optionally your microphone for enhanced
-                security.
+                To verify your identity by matching your BVN with your NIN using
+                facial recognition, we need access to your camera and optionally
+                your microphone for enhanced security.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
@@ -424,12 +494,21 @@ export default function FaceNINVerification() {
                 </h4>
                 <ul className="text-sm text-foreground/80 space-y-3">
                   <li className="flex items-start">
+                    <CreditCard className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">BVN & NIN</span>
+                      <p className="text-foreground/60">
+                        Your Bank Verification Number and National
+                        Identification Number
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
                     <Camera className="h-5 w-5 text-primary mr-2 mt-0.5" />
                     <div>
                       <span className="font-medium">Camera</span>
                       <p className="text-foreground/60">
-                        To capture your face for verification against NIN
-                        records
+                        To capture your facial image for verification
                       </p>
                     </div>
                   </li>
@@ -442,18 +521,10 @@ export default function FaceNINVerification() {
                       </p>
                     </div>
                   </li>
-                  <li className="flex items-start">
-                    <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Location (Optional)</span>
-                      <p className="text-foreground/60">
-                        To enhance security by verifying your location
-                      </p>
-                    </div>
-                  </li>
                 </ul>
               </div>
 
+              {/* Auto-capture option */}
               <div className="flex items-center mb-4 justify-center">
                 <input
                   type="checkbox"
@@ -474,11 +545,11 @@ export default function FaceNINVerification() {
                 onClick={startVerification}
                 className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
-                <Camera className="h-5 w-5 mr-2" /> Allow Access & Continue
+                <Fingerprint className="h-5 w-5 mr-2" /> Start Verification
               </button>
 
               <Link
-                href="/verify/nin"
+                href="/verify/verification-options"
                 className="inline-block mt-4 text-primary hover:text-primary/80 text-sm font-medium"
               >
                 Use other verification methods
@@ -486,16 +557,153 @@ export default function FaceNINVerification() {
             </div>
           )}
 
+          {step === "bvn-input" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <CreditCard className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Enter Your BVN
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Please provide your 11-digit Bank Verification Number
+              </p>
+
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={bvn}
+                  onChange={(e) =>
+                    setBvn(e.target.value.replace(/\D/g, "").slice(0, 11))
+                  }
+                  placeholder="Enter your 11-digit BVN"
+                  className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                {bvnError && (
+                  <p className="text-red-500 text-sm mt-1">{bvnError}</p>
+                )}
+              </div>
+
+              <button
+                onClick={handleBvnSubmit}
+                disabled={bvn.length !== 11}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+              >
+                Continue to NIN
+              </button>
+
+              <button
+                onClick={cleanupEverything}
+                className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {step === "nin-input" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <Fingerprint className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Enter Your NIN
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Please provide your 11-digit National Identification Number
+              </p>
+
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={nin}
+                  onChange={(e) =>
+                    setNin(e.target.value.replace(/\D/g, "").slice(0, 11))
+                  }
+                  placeholder="Enter your 11-digit NIN"
+                  className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                {ninError && (
+                  <p className="text-red-500 text-sm mt-1">{ninError}</p>
+                )}
+              </div>
+
+              <button
+                onClick={handleNinSubmit}
+                disabled={nin.length !== 11}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+              >
+                Verify & Continue
+              </button>
+
+              <button
+                onClick={() => setStep("bvn-input")}
+                className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
+              >
+                Back to BVN
+              </button>
+            </div>
+          )}
+
+          {step === "permissions" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <Shield className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Requesting Permissions
+              </h3>
+              <p className="text-foreground/70 mb-6">
+                Please allow the following permissions when prompted by your
+                browser to continue with BVN to NIN verification.
+              </p>
+
+              <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
+                <div className="flex items-center mb-3">
+                  <Camera className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">Camera Access</span>
+                </div>
+                <div className="flex items-center mb-3">
+                  <Mic className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Microphone Access (Optional)
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">
+                    Location Access (Optional)
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-4 bg-amber-50 border border-amber-200 mb-6">
+                <p className="text-amber-700 text-sm flex items-start">
+                  <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                  <span>
+                    If you don’t see permission prompts, check the address bar
+                    for camera/microphone icons.
+                  </span>
+                </p>
+              </div>
+
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-primary h-2.5 rounded-full animate-pulse w-3/4"></div>
+              </div>
+            </div>
+          )}
+
           {step === "camera" && (
             <div className="text-center py-2">
               <h3 className="text-xl font-bold text-foreground mb-2">
-                NIN Face Verification
+                BVN to NIN Face Verification
               </h3>
               <p className="text-foreground/70 mb-4">
                 Position your face inside the oval. Good light helps.
               </p>
 
               <div className="relative bg-gray-200 rounded-lg overflow-hidden mb-4 aspect-[3/4]">
+                {/* Live video */}
                 <video
                   ref={videoRef}
                   autoPlay
@@ -504,6 +712,8 @@ export default function FaceNINVerification() {
                   className="w-full h-full object-cover"
                   style={{ transform: "scaleX(-1)" }}
                 />
+
+                {/* Human-face overlay (SVG silhouette + guides) */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                   <svg viewBox="0 0 320 400" className="w-64 h-80 opacity-90">
                     <ellipse
@@ -518,14 +728,18 @@ export default function FaceNINVerification() {
                     />
                   </svg>
                 </div>
+
+                {/* subtle status chip */}
                 {faceHint && (
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">
                     {faceHint}
                   </div>
                 )}
+
                 <canvas ref={canvasRef} className="hidden" />
               </div>
 
+              {/* Preview box always present; shows live placeholder until capture */}
               <div className="mb-4">
                 <p className="text-sm text-foreground/70 mb-2">Preview:</p>
                 <div className="relative mx-auto w-32 h-32 border border-border rounded-lg overflow-hidden bg-muted">
@@ -544,6 +758,13 @@ export default function FaceNINVerification() {
                 </div>
               </div>
 
+              <div className="bg-primary/5 rounded-lg p-3 mb-4">
+                <p className="text-xs text-foreground/70">
+                  <strong>Verification in progress:</strong> Your image will be
+                  compared with your BVN and NIN records.
+                </p>
+              </div>
+
               <button
                 onClick={capturePhoto}
                 disabled={!isCameraActive || isCounting || controlsDisabled}
@@ -556,6 +777,7 @@ export default function FaceNINVerification() {
                   : "Capture Image"}
               </button>
 
+              {/* Cancel hidden/disabled during verification */}
               {!controlsDisabled && (
                 <button
                   onClick={cleanupEverything}
@@ -569,69 +791,95 @@ export default function FaceNINVerification() {
 
           {step === "processing" && (
             <div className="text-center py-8">
-              <div className="relative mb-6">
-                <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-                  <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <User className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">
-                Verifying Your NIN
-              </h3>
-              <p className="text-foreground/70">
-                Comparing your facial data with the national ID database…
-              </p>
+              {verificationStatus === "verifying" && (
+                <>
+                  <div className="relative mb-6">
+                    <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                      <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <User className="h-8 w-8 text-primary" />
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">
+                    Verifying Your BVN to NIN Match
+                  </h3>
+                  <p className="text-foreground/70">
+                    Comparing your facial data with your bank&apos;s BVN and NIN
+                    records…
+                  </p>
+                  <div className="mt-6 bg-border rounded-full h-2">
+                    <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {step === "success" && (
             <div className="text-center py-6">
-              <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">
-                NIN Verified Successfully
+              <div className="bg-green-100 rounded-full p-4 inline-flex mb-6">
+                <CheckCircle className="h-12 w-12 text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">
+                BVN to NIN Verification Successful!
               </h3>
-              <p className="text-foreground/70 mb-4">
-                Your facial data matches your National Identification Number.
+              <p className="text-foreground/70 mb-6">
+                Your Bank Verification Number has been successfully matched with
+                your National Identification Number using facial recognition.
               </p>
-
-              {capturedImage && (
-                <div className="relative mx-auto w-32 h-32 border border-border rounded-lg overflow-hidden bg-muted mb-4">
-                  <Image
-                    src={capturedImage}
-                    alt="Captured face"
-                    fill
-                    className="object-cover"
-                  />
+              <div className="bg-primary/5 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-foreground mb-2">
+                  Verification Details
+                </h4>
+                <div className="text-sm text-foreground/70 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Method:</span>
+                    <span className="font-medium">Facial Recognition</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>BVN-NIN Match:</span>
+                    <span className="font-medium">Confirmed</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Time:</span>
+                    <span className="font-medium">Less than 30 seconds</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status:</span>
+                    <span className="font-medium text-green-600">Verified</span>
+                  </div>
                 </div>
-              )}
-
+              </div>
               <Link
                 href="/dashboard"
-                className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors inline-block"
+                className="block w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors"
               >
-                Continue
+                Continue to Dashboard
               </Link>
             </div>
           )}
 
           {step === "error" && (
             <div className="text-center py-6">
-              <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">
-                NIN Verification Failed
+              <div className="bg-red-100 rounded-full p-4 inline-flex mb-6">
+                <AlertCircle className="h-12 w-12 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">
+                BVN to NIN Verification Failed
               </h3>
               <p className="text-foreground/70 mb-4">{errorMessage}</p>
 
               {capturedImage && (
-                <div className="relative mx-auto w-32 h-32 border border-border rounded-lg overflow-hidden bg-muted mb-4">
-                  <Image
-                    src={capturedImage}
-                    alt="Captured face"
-                    fill
-                    className="object-cover"
-                  />
+                <div className="mb-6">
+                  <div className="relative mx-auto w-40 h-40 border border-border rounded-lg overflow-hidden">
+                    <Image
+                      src={capturedImage}
+                      alt="Captured face"
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -656,8 +904,8 @@ export default function FaceNINVerification() {
         {/* Footer */}
         <div className="bg-primary/5 p-4 text-center border-t border-border">
           <p className="text-xs text-foreground/70">
-            Your facial data is encrypted and processed securely for BVN
-            verification purposes only. We do not store your biometric
+            Your BVN, NIN, and facial data are encrypted and processed securely
+            for verification purposes only. We do not store your biometric
             information.
           </p>
         </div>

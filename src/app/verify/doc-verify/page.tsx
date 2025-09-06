@@ -392,7 +392,7 @@ export default function DocumentVerificationPage() {
           {/* Back to verification options link */}
           <div className="flex justify-center mt-6">
             <Link
-              href="/verify/verification-options"
+              href="/identity"
               className="text-primary hover:underline text-sm flex items-center"
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> Back to Verification

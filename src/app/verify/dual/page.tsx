@@ -14,27 +14,23 @@ import {
   ArrowLeft,
   Mic,
   MapPin,
+  CreditCard,
+  Fingerprint,
 } from "lucide-react";
 
-/**
- * Key improvements
- * - Robust webcam start/stop with full cleanup (streams, RAF loops, timeouts)
- * - Cancel button reliably aborts any pending work and resets UI
- * - Controls are disabled/hidden during verification to prevent double actions
- * - Human-face overlay (SVG silhouette + guides)
- * - Live preview tile + captured preview displayed in the preview container
- * - Auto-capture when a face is centered and large enough (via FaceDetector API if available; graceful fallback)
- */
-
-export default function FaceBVNVerification() {
+export default function IdentityVerification() {
   type Step =
     | "intro"
+    | "method-selection"
+    | "bvn-input"
+    | "nin-input"
     | "permissions"
     | "camera"
     | "processing"
     | "success"
     | "error";
   type VStatus = "idle" | "verifying" | "success" | "error";
+  type VerificationMethod = "bvn-only" | "nin-only" | "both";
 
   const [step, setStep] = useState<Step>("intro");
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -52,6 +48,12 @@ export default function FaceBVNVerification() {
   const [showPreview, setShowPreview] = useState(false);
   const [faceHint, setFaceHint] = useState<string | null>(null);
   const [isHoldingSteady, setIsHoldingSteady] = useState(false);
+  const [bvn, setBvn] = useState("");
+  const [nin, setNin] = useState("");
+  const [bvnError, setBvnError] = useState("");
+  const [ninError, setNinError] = useState("");
+  const [selectedMethod, setSelectedMethod] =
+    useState<VerificationMethod>("both");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,9 +62,85 @@ export default function FaceBVNVerification() {
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const holdStartRef = useRef<number | null>(null);
-  const [ovalColor, setOvalColor] = useState<"yellow" | "red" | "green">(
-    "yellow"
-  );
+
+  // Validate BVN format (11 digits)
+  const validateBvn = (value: string): boolean => {
+    const bvnRegex = /^\d{11}$/;
+    return bvnRegex.test(value);
+  };
+
+  // Validate NIN format (11 digits)
+  const validateNin = (value: string): boolean => {
+    const ninRegex = /^\d{11}$/;
+    return ninRegex.test(value);
+  };
+
+  // Handle method selection
+  const handleMethodSelect = (method: VerificationMethod) => {
+    setSelectedMethod(method);
+    // Clear any errors when method changes
+    setBvnError("");
+    setNinError("");
+    setErrorMessage("");
+  };
+
+  // Handle BVN input change
+  const handleBvnChange = (value: string) => {
+    setBvn(value.replace(/\D/g, "").slice(0, 11));
+    // Clear error when input changes
+    setBvnError("");
+    setErrorMessage("");
+  };
+
+  // Handle NIN input change
+  const handleNinChange = (value: string) => {
+    setNin(value.replace(/\D/g, "").slice(0, 11));
+    // Clear error when input changes
+    setNinError("");
+    setErrorMessage("");
+  };
+
+  // Handle form submission based on selected method
+  const handleFormSubmit = () => {
+    let valid = true;
+
+    if (selectedMethod === "bvn-only" || selectedMethod === "both") {
+      if (!validateBvn(bvn)) {
+        setBvnError("BVN must be 11 digits");
+        valid = false;
+      } else {
+        setBvnError("");
+      }
+    }
+
+    if (selectedMethod === "nin-only" || selectedMethod === "both") {
+      if (!validateNin(nin)) {
+        setNinError("NIN must be 11 digits");
+        valid = false;
+      } else {
+        setNinError("");
+      }
+    }
+
+    if (valid) {
+      // In a real app, this would verify that BVN and NIN match
+      // For demo, we'll simulate a successful match if last 4 digits are the same
+      if (selectedMethod === "both") {
+        const bvnLastFour = bvn.slice(-4);
+        const ninLastFour = nin.slice(-4);
+
+        if (bvnLastFour !== ninLastFour) {
+          setErrorMessage(
+            "BVN and NIN do not match. Please check your details."
+          );
+          setStep("error");
+          return;
+        }
+      }
+
+      requestPermissions();
+    }
+  };
 
   // ------- Permission flow
   const requestPermissions = async () => {
@@ -229,7 +307,7 @@ export default function FaceBVNVerification() {
                 : "Center your face"
             );
           } else {
-            setFaceHint("We can’t see your face");
+            setFaceHint("We can't see your face");
           }
         } catch {
           console.warn("FaceDetector error/fallback");
@@ -322,7 +400,7 @@ export default function FaceBVNVerification() {
         setStep("success");
       } else {
         setErrorMessage(
-          "Face verification failed. Please try again or use another method."
+          "Verification failed. Please try again or use another method."
         );
         setVerificationStatus("error");
         setStep("error");
@@ -343,7 +421,7 @@ export default function FaceBVNVerification() {
   };
 
   const startVerification = () => {
-    requestPermissions();
+    setStep("method-selection");
   };
 
   const cleanupEverything = () => {
@@ -373,6 +451,10 @@ export default function FaceBVNVerification() {
     holdStartRef.current = null;
     setFaceHint(null);
     setIsHoldingSteady(false);
+    setBvn("");
+    setNin("");
+    setBvnError("");
+    setNinError("");
 
     // return to intro
     setStep("intro");
@@ -390,9 +472,22 @@ export default function FaceBVNVerification() {
   const controlsDisabled =
     step === "processing" || verificationStatus === "verifying" || isCounting;
 
+  const getMethodDisplayName = (method: VerificationMethod) => {
+    switch (method) {
+      case "bvn-only":
+        return "BVN + Facial Recognition";
+      case "nin-only":
+        return "NIN + Facial Recognition";
+      case "both":
+        return "BVN + NIN + Facial Recognition";
+      default:
+        return "Select Method";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden">
+      <div className="w-full max-w-md bg-card rounded-2xl shadow-lg overflow-hidden border border-border">
         {/* Header */}
         <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8">
           <div className="flex justify-between items-start mb-8">
@@ -401,8 +496,8 @@ export default function FaceBVNVerification() {
                 <Shield className="w-8 h-8 text-primary mr-2" />
                 <h1 className="text-2xl font-bold">SecureID</h1>
               </div>
-              <p className="text-sm text-foreground/70">
-                Bank-verified identity authentication
+              <p className="text-sm text-muted-foreground">
+                Identity authentication with facial recognition
               </p>
             </div>
             <Link
@@ -416,10 +511,10 @@ export default function FaceBVNVerification() {
           <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
             <div className="flex items-center mb-2">
               <User className="w-4 h-4 text-primary mr-2" />
-              <h3 className="font-medium text-sm">BVN Facial Verification</h3>
+              <h3 className="font-medium text-sm">Identity Verification</h3>
             </div>
-            <p className="text-foreground/70 text-xs">
-              Secure BVN verification using facial recognition technology
+            <p className="text-muted-foreground text-xs">
+              Secure verification with mandatory facial recognition
             </p>
           </div>
         </div>
@@ -429,83 +524,234 @@ export default function FaceBVNVerification() {
           {step === "intro" && (
             <div className="text-center py-4">
               <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
-                <Camera className="h-10 w-10 text-primary" />
+                <Fingerprint className="h-10 w-10 text-primary" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3">
-                BVN Face Verification
+                Identity Verification
               </h3>
-              <p className="text-foreground/70 mb-6">
-                To verify your BVN using facial recognition, we need access to
-                your camera and optionally your microphone for enhanced
-                security.
+              <p className="text-muted-foreground mb-6">
+                Verify your identity using BVN, NIN, or both, all with mandatory
+                facial recognition for enhanced security.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
                 <h4 className="font-medium text-primary mb-2">
-                  Required Access:
+                  Verification Options:
                 </h4>
-                <ul className="text-sm text-foreground/80 space-y-3">
+                <ul className="text-sm text-muted-foreground space-y-3">
+                  <li className="flex items-start">
+                    <CreditCard className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">
+                        BVN + Facial Recognition
+                      </span>
+                      <p className="text-muted-foreground">
+                        Verify using your Bank Verification Number and facial
+                        scan
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
+                    <Fingerprint className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                    <div>
+                      <span className="font-medium">
+                        NIN + Facial Recognition
+                      </span>
+                      <p className="text-muted-foreground">
+                        Verify using your National Identification Number and
+                        facial scan
+                      </p>
+                    </div>
+                  </li>
                   <li className="flex items-start">
                     <Camera className="h-5 w-5 text-primary mr-2 mt-0.5" />
                     <div>
-                      <span className="font-medium">Camera</span>
-                      <p className="text-foreground/60">
-                        To capture your facial image for verification against
-                        your BVN records
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start">
-                    <Mic className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Microphone (Optional)</span>
-                      <p className="text-foreground/60">
-                        For liveness detection to prevent spoofing
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start">
-                    <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Location (Optional)</span>
-                      <p className="text-foreground/60">
-                        To enhance security by verifying your location
+                      <span className="font-medium">Dual Verification</span>
+                      <p className="text-muted-foreground">
+                        Verify using both BVN and NIN with facial recognition
                       </p>
                     </div>
                   </li>
                 </ul>
               </div>
 
-              {/* Auto-capture option */}
-              <div className="flex items-center mb-4 justify-center">
-                <input
-                  type="checkbox"
-                  id="autoCapture"
-                  checked={autoCapture}
-                  onChange={(e) => setAutoCapture(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <label
-                  htmlFor="autoCapture"
-                  className="text-sm text-foreground/80"
-                >
-                  Enable auto-capture when your face is centered
-                </label>
-              </div>
-
               <button
                 onClick={startVerification}
-                className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
-                <Camera className="h-5 w-5 mr-2" /> Allow Access & Continue
+                <Fingerprint className="h-5 w-5 mr-2" /> Start Verification
               </button>
 
               <Link
-                href="/verify/bvn"
+                href="/verify/verification-options"
                 className="inline-block mt-4 text-primary hover:text-primary/80 text-sm font-medium"
               >
                 Use other verification methods
               </Link>
+            </div>
+          )}
+
+          {step === "method-selection" && (
+            <div className="text-center py-4">
+              <div className="bg-primary/5 rounded-full p-4 inline-flex mb-6">
+                <CreditCard className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3">
+                Select Verification Method
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                All methods include mandatory facial recognition
+              </p>
+
+              <div className="mb-6">
+                <div className="grid grid-cols-1 gap-3">
+                  <div
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      selectedMethod === "bvn-only"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                    onClick={() => handleMethodSelect("bvn-only")}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                          selectedMethod === "bvn-only"
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground"
+                        }`}
+                      >
+                        {selectedMethod === "bvn-only" && (
+                          <div className="w-2 h-2 bg-primary-foreground rounded-full"></div>
+                        )}
+                      </div>
+                      <CreditCard className="text-foreground mr-2" size={20} />
+                      <span className="font-medium">
+                        BVN + Facial Recognition
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 ml-9">
+                      Verify using your Bank Verification Number
+                    </p>
+                  </div>
+
+                  <div
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      selectedMethod === "nin-only"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                    onClick={() => handleMethodSelect("nin-only")}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                          selectedMethod === "nin-only"
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground"
+                        }`}
+                      >
+                        {selectedMethod === "nin-only" && (
+                          <div className="w-2 h-2 bg-primary-foreground rounded-full"></div>
+                        )}
+                      </div>
+                      <Fingerprint className="text-foreground mr-2" size={20} />
+                      <span className="font-medium">
+                        NIN + Facial Recognition
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 ml-9">
+                      Verify using your National Identification Number
+                    </p>
+                  </div>
+
+                  <div
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      selectedMethod === "both"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                    onClick={() => handleMethodSelect("both")}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                          selectedMethod === "both"
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground"
+                        }`}
+                      >
+                        {selectedMethod === "both" && (
+                          <div className="w-2 h-2 bg-primary-foreground rounded-full"></div>
+                        )}
+                      </div>
+                      <Camera className="text-foreground mr-2" size={20} />
+                      <span className="font-medium">Dual Verification</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 ml-9">
+                      Verify using both BVN and NIN with facial recognition
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {(selectedMethod === "bvn-only" ||
+                  selectedMethod === "both") && (
+                  <div>
+                    <label className="block text-left text-sm font-medium text-foreground mb-2">
+                      BVN (Bank Verification Number)
+                    </label>
+                    <input
+                      type="tel"
+                      value={bvn}
+                      onChange={(e) => handleBvnChange(e.target.value)}
+                      placeholder="Enter your 11-digit BVN"
+                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-background"
+                    />
+                    {bvnError && (
+                      <p className="text-red-500 text-sm mt-1 text-left">
+                        {bvnError}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {(selectedMethod === "nin-only" ||
+                  selectedMethod === "both") && (
+                  <div>
+                    <label className="block text-left text-sm font-medium text-foreground mb-2">
+                      NIN (National Identification Number)
+                    </label>
+                    <input
+                      type="tel"
+                      value={nin}
+                      onChange={(e) => handleNinChange(e.target.value)}
+                      placeholder="Enter your 11-digit NIN"
+                      className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-background"
+                    />
+                    {ninError && (
+                      <p className="text-red-500 text-sm mt-1 text-left">
+                        {ninError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleFormSubmit}
+                className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground py-3 px-4 rounded-lg font-medium transition-colors"
+              >
+                Start Verification
+              </button>
+
+              <button
+                onClick={cleanupEverything}
+                className="w-full mt-3 text-muted-foreground hover:text-foreground py-2 font-medium"
+              >
+                Cancel
+              </button>
             </div>
           )}
 
@@ -517,9 +763,9 @@ export default function FaceBVNVerification() {
               <h3 className="text-xl font-bold text-foreground mb-3">
                 Requesting Permissions
               </h3>
-              <p className="text-foreground/70 mb-6">
+              <p className="text-muted-foreground mb-6">
                 Please allow the following permissions when prompted by your
-                browser to continue with BVN verification.
+                browser to continue with verification.
               </p>
 
               <div className="bg-primary/5 rounded-lg p-4 text-left mb-6">
@@ -541,17 +787,17 @@ export default function FaceBVNVerification() {
                 </div>
               </div>
 
-              <div className="rounded-lg p-4 bg-amber-50 border border-amber-200 mb-6">
-                <p className="text-amber-700 text-sm flex items-start">
+              <div className="rounded-lg p-4 bg-amber-100 border border-amber-300 mb-6">
+                <p className="text-amber-800 text-sm flex items-start">
                   <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                   <span>
-                    If you don’t see permission prompts, check the address bar
-                    for camera/microphone icons.
+                    If you don&apos;t see permission prompts, check the address
+                    bar for camera/microphone icons.
                   </span>
                 </p>
               </div>
 
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="w-full bg-muted rounded-full h-2.5">
                 <div className="bg-primary h-2.5 rounded-full animate-pulse w-3/4"></div>
               </div>
             </div>
@@ -560,13 +806,13 @@ export default function FaceBVNVerification() {
           {step === "camera" && (
             <div className="text-center py-2">
               <h3 className="text-xl font-bold text-foreground mb-2">
-                BVN Face Verification
+                Facial Recognition
               </h3>
-              <p className="text-foreground/70 mb-4">
+              <p className="text-muted-foreground mb-4">
                 Position your face inside the oval. Good light helps.
               </p>
 
-              <div className="relative bg-gray-200 rounded-lg overflow-hidden mb-4 aspect-[3/4]">
+              <div className="relative bg-muted rounded-lg overflow-hidden mb-4 aspect-[3/4]">
                 {/* Live video */}
                 <video
                   ref={videoRef}
@@ -586,7 +832,7 @@ export default function FaceBVNVerification() {
                       rx="120"
                       ry="160"
                       fill="none"
-                      stroke="white"
+                      stroke="rgba(255,255,255,0.8)"
                       strokeDasharray="8 10"
                       strokeWidth="3"
                     />
@@ -595,7 +841,7 @@ export default function FaceBVNVerification() {
 
                 {/* subtle status chip */}
                 {faceHint && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">
                     {faceHint}
                   </div>
                 )}
@@ -605,7 +851,7 @@ export default function FaceBVNVerification() {
 
               {/* Preview box always present; shows live placeholder until capture */}
               <div className="mb-4">
-                <p className="text-sm text-foreground/70 mb-2">Preview:</p>
+                <p className="text-sm text-muted-foreground mb-2">Preview:</p>
                 <div className="relative mx-auto w-32 h-32 border border-border rounded-lg overflow-hidden bg-muted">
                   {capturedImage ? (
                     <Image
@@ -615,7 +861,7 @@ export default function FaceBVNVerification() {
                       className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-foreground/50">
+                    <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
                       Image will appear here
                     </div>
                   )}
@@ -623,16 +869,16 @@ export default function FaceBVNVerification() {
               </div>
 
               <div className="bg-primary/5 rounded-lg p-3 mb-4">
-                <p className="text-xs text-foreground/70">
+                <p className="text-xs text-muted-foreground">
                   <strong>Verification in progress:</strong> Your image will be
-                  compared with your BVN records.
+                  compared with your identity records.
                 </p>
               </div>
 
               <button
                 onClick={capturePhoto}
                 disabled={!isCameraActive || isCounting || controlsDisabled}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground py-3 px-4 rounded-lg font-medium transition-colors"
               >
                 {isCounting
                   ? `Verifying in ${countdown}…`
@@ -645,7 +891,7 @@ export default function FaceBVNVerification() {
               {!controlsDisabled && (
                 <button
                   onClick={cleanupEverything}
-                  className="w-full mt-3 text-foreground/70 hover:text-foreground py-2 font-medium"
+                  className="w-full mt-3 text-muted-foreground hover:text-foreground py-2 font-medium"
                 >
                   Cancel Verification
                 </button>
@@ -666,10 +912,10 @@ export default function FaceBVNVerification() {
                     </div>
                   </div>
                   <h3 className="text-xl font-bold text-foreground mb-2">
-                    Verifying Your BVN
+                    Verifying Your Identity
                   </h3>
-                  <p className="text-foreground/70">
-                    Comparing your facial data with your bank’s BVN records…
+                  <p className="text-muted-foreground">
+                    Comparing your facial data with your identity records…
                   </p>
                   <div className="mt-6 bg-border rounded-full h-2">
                     <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
@@ -685,24 +931,28 @@ export default function FaceBVNVerification() {
                 <CheckCircle className="h-12 w-12 text-green-600" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-2">
-                BVN Verification Successful!
+                Identity Verification Successful!
               </h3>
-              <p className="text-foreground/70 mb-6">
-                Your Bank Verification Number has been successfully verified
-                using facial recognition.
+              <p className="text-muted-foreground mb-6">
+                Your identity has been successfully verified using facial
+                recognition.
               </p>
               <div className="bg-primary/5 rounded-lg p-4 mb-6">
                 <h4 className="font-medium text-foreground mb-2">
                   Verification Details
                 </h4>
-                <div className="text-sm text-foreground/70 space-y-1">
+                <div className="text-sm text-muted-foreground space-y-1">
                   <div className="flex justify-between">
                     <span>Method:</span>
-                    <span className="font-medium">Facial Recognition</span>
+                    <span className="font-medium">
+                      {getMethodDisplayName(selectedMethod)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Verification:</span>
-                    <span className="font-medium">BVN Match Confirmed</span>
+                    <span className="font-medium">
+                      Identity Match Confirmed
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Time:</span>
@@ -716,7 +966,7 @@ export default function FaceBVNVerification() {
               </div>
               <Link
                 href="/dashboard"
-                className="block w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+                className="block w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 px-4 rounded-lg font-medium transition-colors"
               >
                 Continue to Dashboard
               </Link>
@@ -729,9 +979,9 @@ export default function FaceBVNVerification() {
                 <AlertCircle className="h-12 w-12 text-red-600" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-2">
-                BVN Verification Failed
+                Verification Failed
               </h3>
-              <p className="text-foreground/70 mb-4">{errorMessage}</p>
+              <p className="text-red-600 mb-4">{errorMessage}</p>
 
               {capturedImage && (
                 <div className="mb-6">
@@ -749,13 +999,13 @@ export default function FaceBVNVerification() {
               <div className="flex space-x-3">
                 <button
                   onClick={handleRetry}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
                   <RotateCw className="h-5 w-5 mr-2" /> Try Again
                 </button>
                 <Link
                   href="/identity"
-                  className="flex-1 border border-border hover:bg-primary/5 text-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                  className="flex-1 border border-border hover:bg-accent text-foreground py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
                   <ArrowLeft className="h-5 w-5 mr-2" /> Other Method
                 </Link>
@@ -765,9 +1015,9 @@ export default function FaceBVNVerification() {
         </div>
 
         {/* Footer */}
-        <div className="bg-primary/5 p-4 text-center border-t border-border">
-          <p className="text-xs text-foreground/70">
-            Your facial data is encrypted and processed securely for BVN
+        <div className="bg-muted/50 p-4 text-center border-t border-border">
+          <p className="text-xs text-muted-foreground">
+            Your information is encrypted and processed securely for
             verification purposes only. We do not store your biometric
             information.
           </p>
