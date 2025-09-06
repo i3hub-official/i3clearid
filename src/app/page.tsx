@@ -154,7 +154,7 @@ export default function GovLandingPage() {
               Verify, print, and manage your NIN and BVN documents with
               government-compliant security. Reliable, fast, and trusted.
             </p>
-            <Link href="/signup">
+            <Link href="#">
               <div className="flex flex-col sm:flex-row gap-4 justify-center cursor-pointer">
                 <button className="bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition">
                   Get Started Now <ArrowRight className="w-5 h-5" />
